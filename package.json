@@ -1,0 +1,15 @@
+{
+  "name": "zhixu-study-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "知序 — 按自己的节奏，把知识变成能力",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs --production",
+    "build": "node scripts/build.mjs",
+    "test": "node tests/learning.test.mjs",
+    "test:browser": "node scripts/browser-test.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

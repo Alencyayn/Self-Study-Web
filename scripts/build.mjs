@@ -1,0 +1,11 @@
+import { cp, mkdir, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+const root = fileURLToPath(new URL('../', import.meta.url));
+for (const file of ['src/app.js', 'src/learning.js', 'src/courses.js']) execFileSync(process.execPath, ['--check', resolve(root, file)], { stdio: 'inherit' });
+await rm(resolve(root, 'dist'), { recursive: true, force: true });
+await mkdir(resolve(root, 'dist'), { recursive: true });
+await cp(resolve(root, 'index.html'), resolve(root, 'dist/index.html'));
+await cp(resolve(root, 'src'), resolve(root, 'dist/src'), { recursive: true });
+console.log('Built dist/ — self-contained, no external assets or dependencies.');
