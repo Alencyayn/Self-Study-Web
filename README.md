@@ -47,3 +47,13 @@ npm run test:browser  # 使用本机 Chromium 验证完整流程，需先启动�
 - `src/learning.js`：进度约束、复习安排、计时、持久化校验与答案规则。
 - `scripts/serve.mjs`、`scripts/build.mjs`：开发／生产静态服务与构建。
 - `docs/tutor-guide.md`：扩展课程或接入导师时遵循的教学规范。
+
+## 只用 Chrome 的私有预览
+
+[在浏览器中创建 Codespaces 私有预览](https://codespaces.new/Alencyayn/Self-Study-Web?ref=main)
+
+1. 在 Chrome 打开上面的入口并登录自己的 GitHub 账号，点击 **Create codespace**。
+2. 等待云端环境启动。仓库的 `.devcontainer` 配置会自动启动原有网站，并尝试打开 3000 端口预览。
+3. 如果没有自动打开，在底部 **Ports** 面板找到 **3000 / 知序 Study Studio**，点击 **Open in Browser**。保持 **Port Visibility: Private**；GitHub 默认创建私有转发端口。
+
+这不需要在 Windows 安装 Node.js、Git 或其他软件，也不使用 GitHub Pages。入口是创建云端预览的页面，不是已经运行的网站地址；实际地址会在 Codespace 创建后生成，需 GitHub 登录才能访问。Codespaces 使用 GitHub 账户的云开发额度，关闭或停止 Codespace 后网站预览也会停止。不要把端口切换为 Public。

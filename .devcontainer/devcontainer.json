@@ -1,0 +1,13 @@
+{
+  "name": "知序 · 私有浏览器预览",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "知序 Study Studio",
+      "onAutoForward": "openBrowser",
+      "protocol": "http"
+    }
+  },
+  "postAttachCommand": "node .devcontainer/start-preview.mjs"
+}
