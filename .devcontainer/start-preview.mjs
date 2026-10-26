@@ -8,12 +8,12 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const port = Number(process.env.PORT || 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid preview port');
 const origin = `http://127.0.0.1:${port}`;
-const logPath = join(tmpdir(), `zhixu-preview-${port}.log`);
+const logPath = join(tmpdir(), `study-studio-preview-${port}.log`);
 
 async function isReady() {
   try {
     const response = await fetch(origin, { signal: AbortSignal.timeout(1500) });
-    return response.ok && (await response.text()).includes('<title>知序 · 按自己的节奏学习</title>');
+    return response.ok && (await response.text()).includes('<title>study studio</title>');
   } catch { return false; }
 }
 
@@ -39,7 +39,7 @@ if (!(await isReady())) {
   }
 }
 
-console.log(`知序已就绪，转发端口：${port}。`);
+console.log(`study studio已就绪，转发端口：${port}。`);
 const name = process.env.CODESPACE_NAME;
 const domain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
 if (name && domain && /^[a-z0-9-]+$/.test(name) && /^[a-z0-9.-]+$/.test(domain)) {

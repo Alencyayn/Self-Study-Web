@@ -1,71 +1,54 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#304b3d" />
-    <meta name="description" content="知序，一个按自己的节奏学习的空间。从直觉、例题到独立练习与闭卷回忆，把知识真正变成自己的能力。" />
-    <title>知序 · 按自己的节奏学习</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23304b3d'/%3E%3Cpath d='M10 12h9v18h-9zm11-2h9v18h-9z' fill='%23f4f3eb'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="/src/styles.css" />
-    <script type="module" src="/src/app.js"></script>
-  </head>
-  <body>
-    <a class="skip-link" href="#main">跳到主要内容</a>
-    <header class="site-header">
-      <a href="#" class="brand" aria-label="知序首页"><span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="brand-name">知序<span>STUDY STUDIO</span></span></a>
-      <nav class="main-nav" aria-label="主导航">
-        <a href="#today" class="nav-link active" data-nav="today">今日学习<span class="nav-dot"></span></a>
-        <a href="#modules" class="nav-link" data-nav="modules">我的模块</a>
-        <a href="#reviews" class="nav-link" data-nav="reviews">复习计划<span class="nav-count" id="review-count" hidden>0</span></a>
-      </nav>
-      <div class="header-right"><span class="header-motto">一点一滴，自成天地。</span><button class="icon-button method-button" title="了解学习方法" aria-label="了解学习方法"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/><circle cx="12" cy="12" r="4"/></svg></button></div>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#304b3d">
+  <meta name="description" content="study studio — 从自己的资料开始，按自己的节奏理解、练习与回忆。">
+  <title>study studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%23304b3d'/%3E%3Ctext x='8' y='28' font-family='Arial' font-size='27' font-weight='700' fill='%23fafbf8'%3Es%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/assets/katex/katex.min.css">
+  <link rel="stylesheet" href="/src/styles.css">
+  <script type="module" src="/src/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#reading">跳到学习内容</a>
+  <main id="home" class="landing">
+    <h1><button id="open-studio" title="点击上传学习资料，也可以将文件拖入页面" aria-label="study studio，点击导入学习资料">study studio</button></h1>
+    <p class="landing-hint">点击名称，或将学习资料拖到这里</p>
+  </main>
+
+  <div id="workspace" class="workspace" hidden>
+    <header class="workspace-header">
+      <div class="header-left"><button class="icon-button" id="toc-toggle" aria-label="收起目录" aria-expanded="true" aria-controls="study-sidebar"></button><button class="wordmark" id="back-home">study studio</button></div>
+      <span class="document-name" id="document-name"></span>
+      <div class="header-actions"><select id="mode-switch" aria-label="选择学习模式"><option value="self">自学</option><option value="class">课上自学</option></select><button class="plain-button" id="open-library">我的资料</button><button class="icon-button" id="upload-another" aria-label="上传新资料" title="上传新资料"></button></div>
     </header>
+    <div class="workspace-layout">
+      <button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="关闭目录" hidden></button>
+      <aside id="study-sidebar" class="study-sidebar" aria-label="资料目录与学习进度"></aside>
+      <main id="reading" class="reading" tabindex="-1"></main>
+    </div>
+  </div>
 
-    <main id="main" class="page">
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-copy"><div class="eyebrow"><span class="short-rule"></span> A LITTLE EVERY DAY. A LITTLE FURTHER.</div><h1 id="hero-title">慢慢来，<br>学会<span class="title-accent">才算数。</span></h1><p>不必追赶别人的进度。<br class="mobile-only">从一个小问题开始，让理解真正发生。</p></div>
-        <div class="hero-art" aria-label="象征知识相互连接的环形线条插画"><span class="art-top">LEARNING IS A JOURNEY, NOT A RACE.</span><svg id="torus" viewBox="0 0 440 280" role="img" aria-label="交织的知识之环"></svg><div class="art-caption"><span class="art-cross"><svg class="spark-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 4v32M4 20h32M8.7 8.7l22.6 22.6M8.7 31.3 31.3 8.7"/></svg></span><span>Small steps.<br><em>Deep understanding.</em></span><span class="art-index">FIG. 01<br>THE LEARNING LOOP</span></div></div>
-      </section>
-
-      <section id="today" class="today-section" aria-labelledby="today-heading">
-        <div class="section-top"><div class="section-title"><span class="section-number">01 /</span><h2 id="today-heading">把今天，留给一个小目标。</h2></div><span class="section-aside" id="today-date"></span></div>
-        <div class="study-grid">
-          <article class="focus-card">
-            <div class="card-topline"><span class="eyebrow">TODAY’S FOCUS</span><button class="text-button" id="change-topic">更换知识点 <span aria-hidden="true">↗</span></button></div>
-            <div class="focus-content"><div><span class="subject-tag" id="focus-subject"></span><h3 id="focus-title"></h3><p class="focus-english" id="focus-english"></p><p class="focus-description" id="focus-description"></p></div><div class="focus-visual" id="focus-visual" aria-hidden="true"></div></div>
-            <div class="phase-progress" id="focus-progress" aria-label="当前知识点学习进度"></div>
-            <div class="focus-bottom"><span id="focus-status">○ 尚未开始 · 4 个学习阶段</span><button class="primary-button" id="start-learning">开始今天的学习 <span aria-hidden="true">↗</span></button></div>
-          </article>
-          <aside class="ritual-card" aria-labelledby="ritual-heading">
-            <div class="ritual-title"><div><span class="eyebrow">THE 60-MINUTE RITUAL</span><h3 id="ritual-heading">给专注，一点结构。</h3></div><span class="tiny-spark" aria-hidden="true"><svg class="spark-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 4v32M4 20h32M8.7 8.7l22.6 22.6M8.7 31.3 31.3 8.7"/></svg></span></div>
-            <div class="ritual-phases">
-              <div class="ritual-row"><span class="ritual-time">10<small>MIN</small></span><span class="ritual-line"></span><div><h4>建立理解</h4><p>先知道是什么，再理解为什么。</p></div><span class="ritual-no">01</span></div>
-              <div class="ritual-row"><span class="ritual-time">15<small>MIN</small></span><span class="ritual-line"></span><div><h4>学习例子</h4><p>跟随一个完整的思考过程。</p></div><span class="ritual-no">02</span></div>
-              <div class="ritual-row"><span class="ritual-time">25<small>MIN</small></span><span class="ritual-line"></span><div><h4>独立练习</h4><p>合上答案，给自己一点挑战。</p></div><span class="ritual-no">03</span></div>
-              <div class="ritual-row"><span class="ritual-time">10<small>MIN</small></span><span class="ritual-line"></span><div><h4>回忆检查</h4><p>能用自己的话说出，才是真的懂。</p></div><span class="ritual-no">04</span></div>
-            </div>
-            <div class="timer-bar"><div><span class="timer-value" id="timer-display">60:00</span><span class="timer-caption" id="timer-caption">按自己的节奏，也很好</span></div><div class="timer-actions"><button class="icon-button reset-timer" id="reset-timer" aria-label="重置计时器" title="重置计时器">↺</button><button class="timer-toggle" id="timer-toggle" aria-label="开始专注计时"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 9 6-9 6Z" fill="currentColor"/></svg></button></div></div>
-          </aside>
-        </div>
-        <p class="gentle-note"><span aria-hidden="true"><svg class="note-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor"><path d="M4 3v9h11m-4-4 4 4-4 4"/></svg></span> 60 分钟只是参考。理解需要时间，你可以随时放慢、暂停，或再试一次。<button class="text-button method-button">了解学习方法 <span aria-hidden="true">↗</span></button></p>
-      </section>
-
-      <section id="modules" class="modules-section" aria-labelledby="modules-heading">
-        <div class="section-top"><div class="section-title"><span class="section-number">02 /</span><h2 id="modules-heading">每一小步，都有迹可循。</h2></div><div class="filter-tabs" role="group" aria-label="筛选学习模块"><button class="filter-tab active" data-filter="all" aria-pressed="true">全部模块 <span id="module-count">3</span></button><button class="filter-tab" data-filter="progress" aria-pressed="false">学习中</button><button class="filter-tab" data-filter="complete" aria-pressed="false">已掌握</button></div></div>
-        <div class="module-grid" id="module-grid"></div>
-      </section>
-
-      <section class="method-strip" aria-labelledby="method-heading"><div class="method-intro"><span class="eyebrow">A WAY TO REALLY LEARN</span><h2 id="method-heading">从“看懂了”，<br>到“我会了”。</h2><button class="text-button method-button">认识学习循环 <span aria-hidden="true">↗</span></button></div><ol class="method-steps"><li><span>01</span><h3>确定目标</h3><p>一次只学一个<br>小知识点</p></li><li><span>02</span><h3>建立直觉</h3><p>把抽象概念<br>变得具体</p></li><li><span>03</span><h3>学习例题</h3><p>看懂每一步<br>背后的原因</p></li><li><span>04</span><h3>独立尝试</h3><p>先自己思考<br>再寻求提示</p></li><li><span>05</span><h3>检查错误</h3><p>找到卡点<br>有针对性地补足</p></li><li><span>06</span><h3>间隔复习</h3><p>在遗忘之前<br>再相遇一次</p></li></ol></section>
-
-      <section id="reviews" class="reviews-section" aria-labelledby="reviews-heading"><div class="section-top"><div class="section-title"><span class="section-number">03 /</span><h2 id="reviews-heading">让记住，成为自然而然的事。</h2></div><span class="section-aside">SPACED REPETITION</span></div><div class="review-layout"><div class="review-message"><span class="eyebrow">A NOTE TO YOUR FUTURE SELF</span><h3>给未来的自己，<br>留一点温故的时间。</h3><p>今天学会，明天再遇见。<br>完成一个模块后，我们会安排第 1、3、7 天的回忆练习。</p><div class="review-rhythm"><span>今天</span><i></i><span>+1 天</span><i></i><span>+3 天</span><i></i><span>+7 天</span></div></div><div class="review-list" id="review-list"></div></div></section>
-      <footer class="site-footer"><a class="footer-brand" href="#">知序<span>让学习，回到自己的节奏。</span></a><span>LESS RUSH. MORE UNDERSTANDING.</span><span class="footer-note">为每一个愿意慢慢学会的人。 <span aria-hidden="true">↗</span></span></footer>
-    </main>
-
-    <dialog id="topic-dialog" class="small-dialog" aria-labelledby="topic-heading"><div class="dialog-top"><span class="eyebrow">ONE THING AT A TIME</span><button class="icon-button close-dialog" aria-label="关闭">×</button></div><h2 id="topic-heading">今天，想弄懂什么？</h2><p class="dialog-lead">挑一个小知识点。其余的，我们一步一步来。</p><div id="topic-options"></div><p class="dialog-footnote">每次专注一个知识点，比同时开始很多更有效。</p></dialog>
-    <dialog id="method-dialog" class="method-dialog" aria-labelledby="method-dialog-heading"><div class="dialog-top"><span class="eyebrow">LEARN LESS. UNDERSTAND MORE.</span><button class="icon-button close-dialog" aria-label="关闭">×</button></div><h2 id="method-dialog-heading">学习不是赶路，<br>而是不断建立连接。</h2><p class="dialog-lead">以长期掌握为目标。四个阶段是路标，节奏始终由你决定。</p><div class="method-details"><article><span>01 / 10 MIN</span><h3>建立理解</h3><p>弄清是什么、为什么、有何用。用图像、类比和已有知识，建立直观的概念模型。</p></article><article><span>02 / 15 MIN</span><h3>完整例题</h3><p>跟随完整示范，理解每一步的理由。遇到不明白的地方，先停下来弄清原因。</p></article><article><span>03 / 25 MIN</span><h3>独立练习</h3><p>先尝试，再看提示。从概念、方法到下一步，按需展开。用过提示的部分值得复习，不等于整题失败。</p></article><article><span>04 / 10 MIN</span><h3>闭卷回忆</h3><p>合上资料，用自己的话复述，尝试迁移到新情境。只补习薄弱部分，不必全部重来。</p></article></div><div class="method-promise"><span>○ 还在路上</span><span>✓ 确认掌握</span><p>完成前三个阶段，模块仍然保持 ○。经过回忆自检后，才会标记 ✓。感到疲惫可以休息；暂缓一道题，也不妨碍继续学习。</p></div><button class="primary-button close-dialog">按自己的节奏，开始 <span>↗</span></button></dialog>
-    <dialog id="lesson-dialog" class="lesson-dialog" aria-labelledby="lesson-title"><div id="lesson-root"></div></dialog>
-    <div class="toast" role="status" id="toast" hidden></div>
-    <div class="sr-only" role="status" id="announcer"></div>
-  </body>
+  <dialog id="library-dialog" class="library-dialog" aria-labelledby="library-title">
+    <div class="dialog-top"><span class="eyebrow">YOUR OWN LEARNING SPACE</span><button class="icon-button" data-close aria-label="关闭">×</button></div>
+    <h2 id="library-title">从一份资料开始。</h2>
+    <p class="dialog-description">一本讲义，一段笔记，或一个想真正弄懂的问题。</p>
+    <fieldset class="mode-options"><legend>选择学习模式</legend><label><input type="radio" name="import-mode" value="self" checked><span><strong>自学</strong><small>理解 → 例题 → 独立练习 → 闭卷回忆</small></span></label><label><input type="radio" name="import-mode" value="class"><span><strong>课上自学</strong><small>跟随课堂，概念配简单题；课后集中练习复习</small></span></label></fieldset>
+    <button class="upload-zone" id="pick-file"><span id="upload-icon"></span><strong>选择文件，或拖到这里</strong><span>PDF、Markdown、TXT · 最大 25 MB</span></button>
+    <p class="privacy-note">资料仅在当前浏览器读取和保存。</p>
+    <div id="upload-status" class="upload-status" role="status" hidden><span class="loading-dot"></span><span id="upload-status-text">正在读取资料…</span></div>
+    <p id="upload-error" class="upload-error" role="alert" hidden></p>
+    <div id="saved-materials"></div>
+    <div class="sample-options"><span class="eyebrow">OR TAKE A LOOK AROUND</span><button class="sample-button" id="open-sample"><span><strong>Vector Spaces</strong><small>Basis · Coordinates · Dimension</small></span><span aria-hidden="true">↗</span></button><button class="text-button" id="open-builtin">打开原有的三个练习模块 <span aria-hidden="true">↗</span></button></div>
+  </dialog>
+  <dialog id="rest-dialog" class="rest-dialog" aria-labelledby="rest-title"><button class="icon-button rest-close" data-close aria-label="关闭">×</button><div class="breathing-circle"></div><h2 id="rest-title">给自己一点空白。</h2><p>看一看远处，放松肩膀。<br>进度已经保存，专注计时已暂停。</p><button class="primary-button" id="resume-learning">准备好了，继续</button></dialog>
+  <dialog id="reviews-dialog" class="reviews-dialog" aria-labelledby="reviews-title"><div class="dialog-top"><span class="eyebrow">SPACED REPETITION</span><button class="icon-button" data-close aria-label="关闭">×</button></div><h2 id="reviews-title">再遇见一次。</h2><p class="dialog-description">只温故需要的部分，不必全部重新开始。</p><div id="reviews-list"></div></dialog>
+  <canvas id="celebration" class="celebration" aria-hidden="true" hidden></canvas>
+  <input type="file" id="file-input" accept=".pdf,.md,.markdown,.txt,text/plain,text/markdown,application/pdf" hidden>
+  <div id="drop-overlay" class="drop-overlay" hidden><strong>把资料放在这里。</strong><span>PDF · Markdown · TXT</span></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
+</body>
 </html>

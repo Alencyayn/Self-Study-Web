@@ -1,15 +1,22 @@
 {
-  "name": "zhixu-study-studio",
+  "name": "study-studio",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "知序 — 按自己的节奏，把知识变成能力",
+  "description": "study studio — 从自己的资料开始学习",
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "start": "node scripts/serve.mjs --production",
     "build": "node scripts/build.mjs",
-    "test": "node tests/learning.test.mjs",
-    "test:browser": "node scripts/browser-test.mjs"
+    "test": "node tests/learning.test.mjs && node tests/materials.test.mjs",
+    "test:browser": "node scripts/browser-test.mjs",
+    "postinstall": "node scripts/prepare-assets.mjs"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "katex": "0.19.1",
+    "pdfjs-dist": "6.4.299"
+  }
 }

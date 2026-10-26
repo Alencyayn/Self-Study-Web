@@ -1,13 +1,16 @@
 {
-  "name": "知序 · 私有浏览器预览",
+  "name": "study studio · 私有预览",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
-  "forwardPorts": [3000],
+  "forwardPorts": [
+    3000
+  ],
   "portsAttributes": {
     "3000": {
-      "label": "知序 Study Studio",
+      "label": "study studio",
       "onAutoForward": "openBrowser",
       "protocol": "http"
     }
   },
-  "postAttachCommand": "node .devcontainer/start-preview.mjs"
+  "postAttachCommand": "node .devcontainer/start-preview.mjs",
+  "postCreateCommand": "npm ci"
 }

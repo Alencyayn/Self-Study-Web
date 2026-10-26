@@ -1,363 +1,418 @@
-import { courses, phases, art } from './courses.js';
-import { STORAGE_KEY, restoreState, nextPhase, isMastered, completePhase, localDate, addReview, scheduleReviews, timerSeconds, formatTime, escapeHTML as e, evaluatePractice } from './learning.js';
+import { courses, phases } from './courses.js';
+import { newProgress, restoreState, STORAGE_KEY, nextPhase, completePhase, timerSeconds, formatTime, localDate, escapeHTML as e, evaluatePractice } from './learning.js';
+import { validateFile, parseTextMaterial, parsePdfMaterial, createMaterial, materialReview, requiredPhases, sectionComplete } from './materials.js';
+import { listMaterials, storeMaterial } from './storage.js';
+import { markdown } from './markdown.js';
+import { celebrate, soundEnabled, setSoundEnabled } from './celebration.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
-let storageAvailable = true;
-let stored;
-try { stored = localStorage.getItem(STORAGE_KEY); } catch { storageAvailable = false; }
-const state = restoreState(stored);
-let activeFilter = 'all';
-let lesson = null;
-let toastTimeout;
-function save() {
-  if (!storageAvailable) return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {
-    storageAvailable = false;
-    toast('浏览器暂时无法保存记录。本次学习仍可继续，关闭页面后记录可能丢失。');
-  }
-}
-function toast(message) {
-  const element = $('#toast');
-  clearTimeout(toastTimeout);
-  element.textContent = message;
-  element.hidden = false;
-  toastTimeout = setTimeout(() => { element.hidden = true; }, 4800);
-}
-function announce(message) { $('#announcer').textContent = message; }
-const getCourse = id => courses.find(c => c.id === id);
-const selectedCourse = () => getCourse(state.selected);
+const icons = {
+  sidebar: '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m5-10-2 2 2 2"/></svg>',
+  expand: '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m4-10 2 2-2 2"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg>',
+  bookmark: '<svg viewBox="0 0 20 20" fill="none"><path d="M5 17V4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v13l-5-3-5 3Z"/></svg>',
+  play: '<svg viewBox="0 0 20 20"><path d="m7 4 9 6-9 6Z" fill="currentColor" stroke="none"/></svg>',
+  pause: '<svg viewBox="0 0 20 20"><path d="M6 4h3v12H6zm5 0h3v12h-3Z" fill="currentColor" stroke="none"/></svg>'
+};
+let materials = [], current = null, phase = 0, busy = false, transient = {}, sidebarOpen = !matchMedia('(max-width: 760px)').matches, pdfURL = null, reviewId = null;
+let storageOkay = true, storageWarned = false, toastTimeout;
+let timer = { remaining: 3600, running: false, endsAt: null };
+try { timer = restoreState(localStorage.getItem(STORAGE_KEY)).timer; } catch { /* Browser storage is optional. */ }
+let writes = Promise.resolve();
+let importMode = 'self';
+const isDone = (p, mode = current?.mode || 'self') => sectionComplete(p, mode);
+const nextRequired = p => requiredPhases(current?.mode).find(i => !p.completed[i]) ?? 3;
+const section = () => current?.sections[current.selected];
+const progress = () => section()?.progress;
 const countDone = p => p.completed.filter(Boolean).length;
+function toast(text) {
+  clearTimeout(toastTimeout); $('#toast').textContent = text; $('#toast').hidden = false;
+  toastTimeout = setTimeout(() => { $('#toast').hidden = true; }, 4200);
+}
+function announce(text) { $('#announcer').textContent = text; }
+function storageFailure() {
+  storageOkay = false;
+  if (!storageWarned) { storageWarned = true; toast('当前浏览器暂时无法保存资料，本次仍可学习，关闭页面后记录可能丢失。'); }
+}
+function save() {
+  if (!current || !storageOkay) return;
+  const copy = structuredClone(current);
+  writes = writes.then(() => storeMaterial(copy)).catch(storageFailure);
+}
+function saveTimer() {
+  try {
+    const old = restoreState(localStorage.getItem(STORAGE_KEY)); old.timer = timer;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(old));
+  } catch { /* Timer remains usable without persistence. */ }
+}
+function currentDraft() { return reviewId && phase === 3 ? transient.reviewDraft || '' : progress().drafts[phase]; }
+function stageChecks() {
+  const s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
+  if (c) return phase === 0 ? c.understandingChecks : phase === 1 ? ['我能解释示范中的关键步骤，以及每一步为什么必要。'] : phase === 2 ? c.variants[progress().variant].rubric : c.recallRubric;
+  return [
+    ['我能用自己的话解释这一节的核心概念。', '我能说明它为什么成立或在什么情况下有用。'],
+    ['我能解释示范中各个关键步骤的理由。', '我能区分已理解的部分和仍需要补充的部分。'],
+    ['我已独立写出完整思路，而不只是最后的结论。', '我已对照资料检查概念、推理和计算，修正了发现的问题。'],
+    ['我没有看资料，独立复述了核心概念或方法。', '我能解释为什么，并举出一个不同于资料的应用情境。', '我已核对资料，确认没有尚未解决的关键疑问。']
+  ][phase];
+}
+function checkedIndexes() {
+  const p = progress();
+  const confirmed = phase === 0 ? p.understandingReviewed : phase === 1 ? p.exampleReviewed : phase === 2 ? p.practicePassed : reviewId ? transient.reviewChecked : p.recallReviewed;
+  return confirmed ? stageChecks().map((_, i) => i) : transient.checks || [];
+}
+function canContinue() {
+  const p = progress();
+  if (p.completed[phase] && !reviewId) return true;
+  return phase === 0 ? p.understandingReviewed && p.drafts[0].trim().length >= (current.mode === 'class' ? 1 : 8) : phase === 1 ? p.exampleReviewed : phase === 2 ? p.practicePassed && p.hints < 4 : (reviewId ? transient.reviewChecked : p.recallReviewed) && currentDraft().trim().length >= 16;
+}
 
-function drawTorus() {
-  const point = (u, v) => {
-    const radius = 83 + 31 * Math.cos(v);
-    const x = radius * Math.cos(u), y = radius * Math.sin(u), z = 31 * Math.sin(v);
-    const y1 = y * Math.cos(1.0) - z * Math.sin(1.0);
-    const angle = -.42;
-    return [(x * Math.cos(angle) - y1 * Math.sin(angle)) * 1.43 + 222, (x * Math.sin(angle) + y1 * Math.cos(angle)) * 1.43 + 124];
-  };
-  let paths = '';
-  const path = points => points.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`).join('') + 'Z';
-  for (let j = 0; j < 34; j++) {
-    const u = j / 34 * Math.PI * 2;
-    paths += `<path d="${path(Array.from({ length: 65 }, (_, k) => point(u, k / 64 * Math.PI * 2)))}"/>`;
+function renderSidebar() {
+  if (!current) return;
+  const s = section(), p = progress(), totalDone = current.sections.filter(s => isDone(s.progress)).length;
+  const reviews = current.reviews.filter(r => !r.done);
+  $('#study-sidebar').innerHTML = `
+    <div class="sidebar-intro"><p class="eyebrow">${e(current.title)} / STUDY BOOKMARK</p><h2>学习路线</h2><p class="sidebar-description">${e(current.description)}</p></div>
+    <nav class="contents-nav" aria-label="章节目录">${current.sections.map((item, i) => {
+      const done = isDone(item.progress), active = i === current.selected;
+      const status = done ? '已完成 · 已通过回忆自检' : active ? `当前位置 · ${phases[phase].title}` : countDone(item.progress) > 0 ? `已学习 · 待${phases[nextRequired(item.progress)].title}` : '尚未开始';
+      return `<button class="chapter-link ${active ? 'current' : ''}" data-section="${i}" ${active ? 'aria-current="location"' : ''}><span class="chapter-marker ${done ? 'status-circle is-complete' : active ? 'bookmark-icon' : 'status-circle'}" aria-label="${done ? '已完成' : '未完成'}">${!done && active ? icons.bookmark : ''}</span><span><strong>${e(item.title)}</strong><small>${status}</small></span></button>`;
+    }).join('')}</nav>
+    ${current.mode === 'class' ? '<button class="batch-link" data-action="batch">课后集中练习 <span>↗</span></button>' : ''}<div class="current-module"><p class="eyebrow">CURRENT MODULE / ${current.mode === 'class' ? '课上自学' : '自学'}</p><nav class="phase-nav" aria-label="当前模块的学习阶段">${phases.map((item, i) => !requiredPhases(current.mode).includes(i) ? '' : `<button class="stage-link ${phase === i ? 'current' : ''}" data-phase="${i}" ${reviewId && i !== 3 ? 'disabled' : ''} ${phase === i ? 'aria-current="step"' : ''}><span class="status-circle ${p.completed[i] ? 'is-complete' : phase === i ? 'is-current' : ''}" aria-label="${p.completed[i] ? '已完成' : '未完成'}"></span><span>0${requiredPhases(current.mode).indexOf(i) + 1} — ${['Understanding', 'Worked Examples', 'Independent Practice', 'Active Recall'][i]}</span></button>`).join('')}</nav><p class="progress-note">${current.mode === 'class' ? '课上理解，课后集中练习与回忆。<br>三个环节均完成后，模块圆点才会填满。' : '完成全部四阶段自检后，<br>模块圆点才会填满。'}</p><p class="progress-summary">${totalDone} / ${current.sections.length} 个模块已完成</p></div>
+    <div class="sidebar-footer"><div class="focus-timer"><button class="timer-control" id="timer-toggle" aria-label="${timer.running ? '暂停专注计时' : '开始专注计时'}">${timer.running ? icons.pause : icons.play}</button><span id="timer-value">${formatTime(timerSeconds(timer))}</span><button class="plain-button reset-timer" data-action="reset-timer" aria-label="重置计时器">↺</button><button class="plain-button rest-button" data-action="rest">休息一下</button></div><button class="sidebar-review-link" data-action="reviews">复习安排 <span>${reviews.length ? String(reviews.length).padStart(2, '0') : '—'}</span></button><button class="sound-preference" data-action="sound" aria-pressed="${soundEnabled()}">庆祝音效 <span>${soundEnabled() ? '开' : '关'}</span></button></div>`;
+  updateSidebar();
+}
+function updateSidebar() {
+  const mobile = matchMedia('(max-width: 760px)').matches;
+  $('#workspace').classList.toggle('sidebar-collapsed', !sidebarOpen);
+  $('#workspace').classList.toggle('sidebar-open', sidebarOpen);
+  $('#study-sidebar').inert = !sidebarOpen;
+  $('#toc-toggle').innerHTML = sidebarOpen ? icons.sidebar : icons.expand;
+  $('#toc-toggle').setAttribute('aria-expanded', String(sidebarOpen));
+  $('#toc-toggle').setAttribute('aria-label', sidebarOpen ? '收起目录' : '展开目录');
+  $('#sidebar-backdrop').hidden = !(mobile && sidebarOpen);
+  document.body.classList.toggle('mobile-sidebar-open', mobile && sidebarOpen && !$('#workspace').hidden);
+}
+function toggleSidebar() { sidebarOpen = !sidebarOpen; updateSidebar(); }
+function bodyForPhase() {
+  const s = section(), c = s.courseId && courses.find(c => c.id === s.courseId), p = progress();
+  if (c) {
+    if (phase === 0) return `<p>${c.concise}</p><p>${c.deeper}</p>`;
+    if (phase === 1) return `<p>${c.examplePrompt}</p><ol>${c.steps.map(([title, detail]) => `<li><strong>${title}</strong><p>${detail}</p></li>`).join('')}</ol>`;
+    return '';
   }
-  for (let j = 0; j < 15; j++) {
-    const v = j / 15 * Math.PI * 2;
-    paths += `<path d="${path(Array.from({ length: 101 }, (_, k) => point(k / 100 * Math.PI * 2, v)))}"/>`;
+  if (phase === 0) return markdown(s.blocks.key || s.body);
+  if (phase === 1) return s.blocks.example ? markdown(s.blocks.example) : `<p class="source-note">这份资料没有单独标注完整例题。选一个其中的例子、证明或操作过程，逐步解释它为什么成立。</p>${markdown(s.blocks.key || s.body)}`;
+  return '';
+}
+function questionForPhase() {
+  const s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
+  if (phase === 0 && current.mode === 'class') {
+    const simple = c ? { kernel: '零向量一定在核里吗？用一句话解释为什么。', derivative: '物体的速度为零，就说明它的位置为零吗？', recursion: '阶乘函数遇到 n ≤ 1 就返回 1，这是终止条件，还是继续递归的步骤？' }[c.id] : current.id === 'sample-vector-spaces' ? ['标准基 {(1, 0), (0, 1)} 包含几个向量？', '若 v = 2b₁ + 3b₂，那么 [v]ᵦ 的两个坐标是什么？', 'P₃ 的标准基为 {1, t, t², t³}，它的维度是多少？'][current.selected] : `请用一句话解释「${s.title}」，并举一个最简单的例子。`;
+    return markdown(simple);
   }
-  $('#torus').innerHTML = `<g fill="none" stroke="currentColor" stroke-width=".56" opacity=".69">${paths}</g><path d="M42 213h27m-13-13v26" stroke="currentColor" stroke-width=".7" opacity=".4"/><text x="364" y="44" font-family="Georgia" font-size="11" font-style="italic" fill="currentColor" opacity=".6">∞</text>`;
+  if (c) return phase === 0 ? markdown(c.question) : phase === 1 ? '<p>试着用自己的话解释一个关键步骤。（选填）</p>' : phase === 2 ? markdown(c.variants[progress().variant].prompt) : `<ol>${c.recallQuestions.map(q => `<li>${e(q)}</li>`).join('')}</ol>`;
+  if (phase === 0) return s.blocks.practice ? markdown(s.blocks.practice) : `<p>用自己的话解释「${e(s.title)}」的核心想法。为什么需要它？</p>`;
+  if (phase === 1) return '<p>这个例子最重要的一步是什么？为什么这样做？（笔记选填）</p>';
+  if (phase === 2) return s.blocks.practice ? markdown(s.blocks.practice) : `<p>先合上资料，为「${e(s.title)}」写一个新的例子或实际应用，并独立完成。记下你的推理与验证过程。</p>`;
+  return `<ol><li>不看资料，用自己的话解释「${e(s.title)}」的核心概念。</li><li>回想一个重要结论或步骤，并说明为什么。</li><li>换一个新情境，你会怎样运用它？</li></ol>`;
 }
-
-function renderFocus() {
-  const course = selectedCourse();
-  const p = state.modules[course.id];
-  $('#focus-subject').textContent = course.subject;
-  $('#focus-title').textContent = course.title;
-  $('#focus-english').textContent = course.english;
-  $('#focus-description').textContent = course.description;
-  $('#focus-visual').innerHTML = art[course.id];
-  $('#focus-progress').innerHTML = phases.map((phase, i) => `<div class="phase-item ${p.completed[i] ? 'done' : i === nextPhase(p) ? 'current' : ''}"><span>PHASE 0${i + 1}</span><div><b>${p.completed[i] ? '✓' : '○'}</b>${phase.title}</div></div>`).join('');
-  const started = countDone(p) > 0 || p.drafts.some(Boolean);
-  $('#focus-status').textContent = isMastered(p) ? '✓ 已完成回忆自检 · 4 / 4' : started ? `○ 正在${phases[nextPhase(p)].title} · ${countDone(p)} / 4` : '○ 尚未开始 · 4 个学习阶段';
-  $('#start-learning').innerHTML = `${isMastered(p) ? '回顾这个知识点' : started ? '继续今天的学习' : '开始今天的学习'} <span aria-hidden="true">↗</span>`;
+function checksHTML() {
+  const checked = checkedIndexes();
+  return `<div class="self-checks">${stageChecks().map((text, i) => `<label><input type="checkbox" data-check="${i}" ${checked.includes(i) ? 'checked' : ''}><span>${e(text)}</span></label>`).join('')}</div>`;
 }
-function renderModules() {
-  const visible = courses.filter(c => {
-    const p = state.modules[c.id];
-    return activeFilter === 'all' || activeFilter === 'complete' && isMastered(p) || activeFilter === 'progress' && !isMastered(p) && (countDone(p) > 0 || p.drafts.some(Boolean));
-  });
-  $('#module-grid').innerHTML = visible.length ? visible.map(course => {
-    const p = state.modules[course.id];
-    const started = countDone(p) > 0 || p.drafts.some(Boolean);
-    return `<article class="module-card ${course.id === state.selected ? 'selected' : ''}"><div class="module-card-top"><span>${course.number} / ${course.subject}</span><span class="module-state"><b>${isMastered(p) ? '✓' : '○'}</b>${isMastered(p) ? '已掌握' : started ? '学习中' : '待探索'}</span></div><div class="module-body"><div><h3>${course.title}</h3><p>${course.short}</p></div><div class="module-art">${art[course.id]}</div></div><div class="module-bottom"><div class="mini-progress" aria-label="已完成 ${countDone(p)} 个阶段，共 4 个">${p.completed.map(done => `<i class="${done ? 'done' : ''}"></i>`).join('')}</div><button data-course="${course.id}">${isMastered(p) ? '回顾学习' : started ? '继续学习' : '开始探索'} <span aria-hidden="true">↗</span></button></div></article>`;
-  }).join('') : `<div class="filter-empty"><span>○</span><h3>${activeFilter === 'complete' ? '掌握，是一步一步发生的。' : '你的下一步，从好奇开始。'}</h3><p>${activeFilter === 'complete' ? '完成四个阶段和回忆自检，模块才会出现在这里。' : '挑一个想弄懂的小问题，开始第一段学习。'}</p><button class="text-button" id="show-all-modules">看看全部模块 <span>↗</span></button></div>`;
+function referenceAnswer() {
+  const s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
+  if (c) return phase === 3 ? e(c.recallAnswer) : markdown(c.variants[progress().variant].solution);
+  return markdown(s.blocks.answer || s.blocks.key || s.body);
 }
-function renderReviews() {
-  const pending = state.reviews.filter(r => !r.done).sort((a, b) => a.due.localeCompare(b.due));
-  const dueCount = pending.filter(r => r.due <= localDate()).length;
-  $('#review-count').hidden = !dueCount;
-  $('#review-count').textContent = dueCount;
-  $('#review-list').innerHTML = pending.length ? pending.map(review => {
-    const course = getCourse(review.moduleId);
-    const date = new Date(review.due + 'T12:00:00');
-    const due = review.due <= localDate();
-    return `<article class="review-item"><div class="review-day">${date.getDate()}<small>${date.getMonth() + 1} 月</small></div><div><h4>○ ${course.title}</h4><p>${due ? '现在就可以温故' : date.toLocaleDateString('zh-CN', { weekday: 'long' })} · ${e(review.reason)}</p></div><button data-review="${e(review.id)}">${due ? '开始回忆' : '提前回忆'} ↗</button></article>`;
-  }).join('') : `<div class="review-empty"><div class="empty-flower" aria-hidden="true"><svg class="spark-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 4v32M4 20h32M8.7 8.7l22.6 22.6M8.7 31.3 31.3 8.7"/></svg></div><h4>还没有待复习的知识点</h4><p>安心完成今天的小目标。<br>值得记住的知识，我们会陪你再遇见。</p><button class="text-button" id="review-start">先学一点新东西 <span aria-hidden="true">↗</span></button></div>`;
+function feedbackHTML() {
+  if (!transient.showCheck && !canContinue()) return '';
+  const p = progress();
+  if (phase === 1 && !transient.showCheck && !p.exampleReviewed) return '';
+  const f = transient.feedback;
+  const showReference = phase === 3 || phase === 2 && p.practicePassed;
+  return `<section class="check-panel" aria-label="自检标准"><div class="block-label"><span>${f?.title ? e(f.title) : phase === 3 ? 'CHECK YOUR RECALL' : 'SELF CHECK'}</span><span>对照自检</span></div>${f ? `<p>${e(f.text)}</p>` : `<p>对照资料，确认自己能独立解释。尚不确定的部分，可以只回到对应阶段。</p>`}${showReference ? `<details class="reference-answer"><summary>展开参考内容</summary><div class="prose">${referenceAnswer()}</div></details>` : ''}${f?.status === 'retry' || f?.status === 'empty' ? '' : checksHTML()}${phase === 2 && progress().hints >= 4 ? '<p class="helper-note">你已看过完整参考。请先隐藏解答、重新独立尝试，再确认完成。</p><button class="secondary-button" data-action="retry">隐藏参考，重新尝试</button>' : ''}</section>`;
 }
-function renderHome() { renderFocus(); renderModules(); renderReviews(); }
-function setFilter(filter) {
-  activeFilter = filter;
-  document.querySelectorAll('.filter-tab').forEach(button => {
-    button.classList.toggle('active', button.dataset.filter === filter);
-    button.setAttribute('aria-pressed', button.dataset.filter === filter);
-  });
-  renderModules();
+function hintsHTML() {
+  const p = progress(), s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
+  const hints = c ? c.variants[p.variant].hints : ['先回忆这一节的定义：对象是什么，需要满足什么条件？', '把已知条件与目标分别列出来，找一个能把两者连接起来的概念或步骤。', '回看本节示范中最接近的一步，再隐藏资料，尝试解释下一步应该怎样做。'];
+  return p.hints ? `<div class="hints">${hints.slice(0, p.hints).map((hint, i) => `<div class="hint"><span>0${i + 1} / ${['概念', '方法', '下一步'][i]}提示</span><p>${e(hint)}</p></div>`).join('')}${p.hints >= 4 ? `<div class="hint"><span>04 / 参考内容</span><div class="prose">${referenceAnswer()}</div></div>` : ''}<p class="helper-note">使用提示的部分已加入明天复习，不代表整道题失败。</p></div>` : '';
 }
-function selectTopic(id) {
-  state.selected = id;
-  save(); renderHome();
+function completeHTML() {
+  return `<div class="completion"><span class="completion-circle"></span><p class="eyebrow">ONE SMALL STEP, TRULY YOURS.</p><h1 tabindex="-1">这一节，真正学会了。</h1><p>${e(section().title)} · ${current.mode === 'class' ? '课堂理解、集中练习和回忆已完成' : '四阶段自检已完成'}。<br>已安排第 1、3、7 天的间隔回忆。</p><div class="completion-days"><span>+1<small>天后回想</small></span><span>+3<small>天后巩固</small></span><span>+7<small>天后迁移</small></span></div><button class="primary-button" data-action="next-section">${current.selected < current.sections.length - 1 ? '继续下一个模块' : '回到这一节'} <span>→</span></button></div>`;
 }
-function renderTopics() {
-  $('#topic-options').innerHTML = courses.map(course => `<button class="topic-option ${course.id === state.selected ? 'selected' : ''}" data-topic="${course.id}"><span>${course.id === state.selected ? '✓' : '○'}</span><div><h3>${course.title}</h3><p>${course.subject} · 约 60 分钟</p></div><span aria-hidden="true">↗</span></button>`).join('');
+function renderBatch() {
+  const target = transient.batchPhase || 2;
+  $('#reading').innerHTML = `<div class="reading-meta"><span>AFTER CLASS / ALL CHAPTERS</span><span>课上自学</span></div><header class="article-heading"><h1 tabindex="-1">课后，把知识连起来。</h1><p>课堂里先理解。现在集中练习，再用闭卷回忆检查掌握。</p></header><div class="batch-tabs"><button data-batch-phase="2" aria-pressed="${target === 2}">独立练习</button><button data-batch-phase="3" aria-pressed="${target === 3}">闭卷回忆</button></div><div class="batch-list">${current.sections.map((s, i) => {
+    const c = s.courseId && courses.find(c => c.id === s.courseId);
+    const question = target === 3 ? `不看资料，解释「${s.title}」的核心概念、为什么成立，以及一个新情境中的应用。` : c ? c.variants[s.progress.variant].prompt : s.blocks.practice || `为「${s.title}」写一个新的例子或实际应用，并独立完成。`;
+    return `<section class="batch-card"><div class="batch-card-heading"><span class="status-circle ${s.progress.completed[target] ? 'is-complete' : ''}"></span><h2>${e(s.title)}</h2></div><div class="prose">${markdown(question)}</div><label class="sr-only" for="batch-answer-${i}">第 ${i + 1} 节的${target === 2 ? '独立练习' : '闭卷回忆'}</label><textarea class="answer-input" id="batch-answer-${i}" data-batch-draft="${i}" maxlength="12000" rows="3" placeholder="${target === 3 ? '先不看资料，写下你能回想起来的……' : '写下你的独立思路……'}">${e(s.progress.drafts[target])}</textarea><button class="secondary-button" data-batch-start="${i}">${s.progress.completed[target] ? '回看这次自检' : '检查与继续'} ↗</button></section>`;
+  }).join('')}</div>`;
 }
-
+function renderReading(focus = false) {
+  if (!current) return;
+  const s = section(), p = progress(), source = current.filename.replace(/\.[^.]+$/, '');
+  if (transient.batch) { renderBatch(); return; }
+  if (transient.complete) { $('#reading').innerHTML = completeHTML(); return; }
+  const fullTitle = s.title.replace(/^\d+(?:\.\d+)*\s*[—–-]?\s*/, '');
+  const headingQuestion = s.blocks.question || (phase === 0 ? '一次弄懂一个小知识点，把理解变成自己的能力。' : phases[phase].description);
+  $('#reading').innerHTML = `
+    ${transient.fromBatch ? '<button class="text-button batch-back" data-action="batch">← 返回集中练习</button>' : ''}<div class="reading-meta"><span>${e(s.page ? `${source} / PAGE ${String(s.page).padStart(2, '0')}` : `${source} / SECTION ${String(current.selected + 1).padStart(2, '0')}`)}</span>${pdfURL ? `<a href="${pdfURL}#page=${s.page || 1}" target="_blank" rel="noopener">查看原文件 ↗</a>` : '<span class="saved-indicator">本机保存</span>'}</div>
+    <header class="article-heading"><h1 tabindex="-1">${e(fullTitle)}</h1><p>${phase === 0 && s.blocks.question ? '核心问题：' : ''}${e(headingQuestion)}</p></header>
+    ${phase < 2 ? `<section class="source-section"><div class="block-label"><span>${phase === 0 ? 'THE KEY IDEA' : 'WORKED EXAMPLE'}</span><span>${phases[phase].title}</span></div>${current.scanned ? `<p class="source-note">这份 PDF 没有可提取的文字，先按原稿页码阅读。</p><iframe class="pdf-source" title="资料原页" src="${pdfURL}#page=${s.page || 1}&view=FitH"></iframe>` : `<div class="prose">${bodyForPhase()}</div>`}</section>` : ''}
+    ${phase === 3 ? `<p class="recall-note">先合上资料，从记忆中写下来。完成后再核对。</p>` : ''}
+    <section class="question-section"><div class="block-label"><span>${[current.mode === 'class' ? 'ONE SIMPLE CHECK' : 'QUICK CHECK / 01', 'YOUR UNDERSTANDING', 'TRY IT YOURSELF', reviewId ? 'SPACED RECALL' : 'ACTIVE RECALL'][phase]}</span><span>${['Understanding', 'Worked Examples', 'Independent Practice', 'Active Recall'][phase]}</span></div><div class="prose question-text">${questionForPhase()}</div><label class="sr-only" for="study-answer">${phases[phase].title}的回答</label><textarea id="study-answer" class="answer-input" maxlength="12000" rows="4" placeholder="${phase === 3 ? '合上资料，写下你记得的概念、理由与应用……' : '写下你的判断和理由……'}">${e(currentDraft())}</textarea><div class="answer-toolbar">${phase === 2 ? `<button class="text-button" data-action="hint" ${p.hints >= 4 ? 'disabled' : ''}>${p.hints === 0 ? '需要一点提示？' : p.hints === 3 ? '查看完整参考' : '再提示一点'}${p.hints ? ` (${p.hints}/4)` : ''}</button>` : '<span class="answer-note">用自己的话表达，不用追求完美。</span>'}<button class="secondary-button" data-action="check">${phase === 1 ? '我能解释关键步骤' : phase === 3 ? '写好了，对照自检' : '检查我的思路'} <span>↗</span></button></div>${phase === 2 ? hintsHTML() : ''}${feedbackHTML()}</section>
+    <div class="learning-controls"><div class="pace-control"><span>学习节奏</span>${[['slow', '慢一点'], ['normal', '合适'], ['fast', '快一点']].map(([value, label]) => `<button data-pace="${value}" aria-pressed="${p.pace === value}">${label}</button>`).join('')}</div><button class="text-button" data-action="defer">这节先放一放 ↗</button></div>
+    ${p.pace === 'slow' ? '<p class="pace-note">一次只处理一个问题。可以先写下已确定的部分，再找出最不清楚的一步。无需重学已经掌握的内容。</p>' : ''}
+    <footer class="reading-footer"><span>${phase === 3 ? '独立练习与回忆自检完成后，模块圆点才会填满。' : '理解与自检确认后，再进入下一步。'}</span><button class="primary-button" data-action="continue" ${!canContinue() ? 'disabled' : ''}>${phase === 3 ? reviewId ? '完成这次复习' : '确认这次回忆' : current.mode === 'class' && phase === 0 ? '理解了 · 继续跟课' : current.mode === 'class' && phase === 2 ? '确认练习 · 返回集中练习' : ['继续 · 完整例题', '继续 · 独立练习', '继续 · 闭卷回忆'][phase]} <span>→</span></button></footer>`;
+  if (focus) { window.scrollTo({ top: 0 }); $('h1', $('#reading'))?.focus({ preventScroll: true }); }
+}
+function render() { renderSidebar(); renderReading(); $('#document-name').textContent = current?.filename || ''; tickTimer(); }
+function resetTransient() { transient = {}; }
+function goPhase(index) {
+  if (!Number.isInteger(index) || index < 0 || index > 3 || reviewId && index !== 3) return;
+  if (matchMedia('(max-width:760px)').matches) sidebarOpen = false;
+  phase = index; current.phase = index; resetTransient(); save(); renderSidebar(); renderReading(true);
+}
+function openSection(index) {
+  if (!current.sections[index]) return;
+  reviewId = null; current.selected = index; phase = current.mode === 'class' || isDone(progress()) ? 0 : nextPhase(progress()); current.phase = phase;
+  resetTransient(); if (matchMedia('(max-width:760px)').matches) sidebarOpen = false;
+  save(); render(); window.scrollTo({ top: 0 });
+}
+function openMaterial(material) {
+  current = material; current.reviews ||= [];
+  if (pdfURL) URL.revokeObjectURL(pdfURL);
+  pdfURL = current.fileBlob ? URL.createObjectURL(current.fileBlob) : null;
+  current.selected = Math.min(Math.max(0, current.selected || 0), current.sections.length - 1);
+  current.mode ||= importMode; $('#mode-switch').value = current.mode; phase = Number.isInteger(current.phase) && current.phase >= 0 && current.phase <= 3 ? current.phase : 0; reviewId = null; resetTransient();
+  importMode = current.mode;
+  if (current.mode === 'class' && phase === 1) phase = 0;
+  $('#home').hidden = true; $('#workspace').hidden = false;
+  $('#library-dialog').close(); $('#upload-error').hidden = true;
+  sidebarOpen = !matchMedia('(max-width:760px)').matches;
+  render(); window.scrollTo({ top: 0 });
+  try { sessionStorage.setItem('study-studio-current', current.id); } catch { /* Optional resume. */ }
+}
+function home() {
+  save(); $('#workspace').hidden = true; $('#home').hidden = false; document.body.classList.remove('mobile-sidebar-open');
+  try { sessionStorage.removeItem('study-studio-current'); } catch { /* Optional resume. */ }
+  $('#open-studio').focus(); window.scrollTo({ top: 0 });
+}
+function renderLibrary() {
+  const visible = [...materials].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+  $('#saved-materials').innerHTML = visible.length ? `<p class="eyebrow library-label">YOUR MATERIALS</p>${visible.map(m => `<button class="material-link" data-material="${e(m.id)}"><span class="material-initial">${m.kind === 'pdf' ? 'PDF' : m.id === 'builtin-courses' ? 'ABC' : 'TXT'}</span><span><strong>${e(m.title)}</strong><small>${m.sections.length} 个模块 · ${m.sections.filter(s => isDone(s.progress, m.mode)).length} 个完成</small></span><span aria-hidden="true">↗</span></button>`).join('')}` : '';
+}
+function showLibrary() {
+  renderLibrary();
+  document.querySelectorAll('[name="import-mode"]').forEach(input => { input.checked = input.value === importMode; });
+  $('#library-dialog').showModal();
+}
+async function fileId(bytes) {
+  if (crypto.subtle) { const hash = await crypto.subtle.digest('SHA-256', bytes); return 'file-' + [...new Uint8Array(hash)].map(n => n.toString(16).padStart(2, '0')).join(''); }
+  return `file-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+async function importFile(file) {
+  if (busy || !file) return;
+  busy = true; $('#pick-file').disabled = true; $('#upload-error').hidden = true;
+  if (!$('#library-dialog').open) showLibrary();
+  $('#upload-status').hidden = false; $('#upload-status-text').textContent = '正在读取资料…';
+  try {
+    validateFile(file);
+    const bytes = await file.arrayBuffer(), id = await fileId(bytes);
+    const previous = materials.find(m => m.id === id);
+    if (previous) { openMaterial(previous); toast('已打开这份资料，上次的进度已保留。'); return; }
+    let parsed;
+    const pdf = /\.pdf$/i.test(file.name);
+    if (pdf) parsed = await parsePdfMaterial(bytes, file.name, text => { $('#upload-status-text').textContent = text; });
+    else {
+      let text = new TextDecoder('utf-8').decode(bytes);
+      if ((text.match(/\uFFFD/g)?.length || 0) > 2) text = new TextDecoder('gb18030').decode(bytes);
+      parsed = parseTextMaterial(text, file.name);
+    }
+    const material = createMaterial(parsed, file.name, id, { kind: pdf ? 'pdf' : 'text', mode: importMode, scanned: !!parsed.scanned, ...(pdf ? { fileBlob: new Blob([bytes], { type: 'application/pdf' }) } : {}) });
+    materials.push(material); current = material; save(); await writes;
+    openMaterial(material); announce(`已导入 ${file.name}，生成 ${material.sections.length} 个目录项`);
+  } catch (error) {
+    $('#upload-error').textContent = error.message || '资料读取失败，请换一份文件重试。'; $('#upload-error').hidden = false;
+  } finally { busy = false; $('#pick-file').disabled = false; $('#upload-status').hidden = true; $('#file-input').value = ''; }
+}
+async function openSample() {
+  const existing = materials.find(m => m.id === 'sample-vector-spaces');
+  if (existing) { openMaterial(existing); return; }
+  try {
+    const response = await fetch('/assets/sample-material.md');
+    if (!response.ok) throw new Error('示例资料暂时无法读取。');
+    const parsed = parseTextMaterial(await response.text(), 'Vector Spaces.md');
+    const material = createMaterial(parsed, 'Vector Spaces · 示例资料', 'sample-vector-spaces', { kind: 'sample', mode: importMode });
+    materials.push(material); current = material; save(); openMaterial(material);
+  } catch (error) { toast(error.message); }
+}
+function openBuiltin() {
+  let existing = materials.find(m => m.id === 'builtin-courses');
+  if (!existing) {
+    let legacy;
+    try { legacy = restoreState(localStorage.getItem(STORAGE_KEY)); } catch { legacy = restoreState(); }
+    existing = createMaterial({ title: '三个小知识点', description: '线性变换的核、导数的直觉与递归。原有学习记录会继续保留。', sections: courses.map(c => ({ id: c.id, title: c.title, courseId: c.id, body: c.concise, blocks: { question: c.description }, progress: legacy.modules[c.id] || newProgress() })) }, '内置练习', 'builtin-courses', { kind: 'builtin', mode: importMode });
+    existing.reviews = legacy.reviews.map(r => ({ ...r, sectionId: r.moduleId }));
+    materials.push(existing); current = existing; save();
+  }
+  openMaterial(existing);
+}
+function continueLearning() {
+  const p = progress();
+  if (!canContinue()) return;
+  if (reviewId) {
+    const review = current.reviews.find(r => r.id === reviewId); if (review) review.done = true;
+    reviewId = null; resetTransient(); save(); pauseTimer(); render(); toast('这一次回忆已完成，记录已保存。'); return;
+  }
+  const wasDone = isDone(p);
+  if (!completePhase(p, phase, { unordered: true, understandingMinLength: current.mode === 'class' ? 1 : 8 })) return;
+  if (isDone(p) && !wasDone) {
+    if (!wasDone) materialReview(current, section().id);
+    transient.complete = true; pauseTimer(); save(); render(); celebrate(); announce('模块已完成，目录圆点已填为主题色。');
+  } else if (current.mode === 'class') {
+    save();
+    if (phase === 0 && current.selected < current.sections.length - 1) { openSection(current.selected + 1); phase = 0; current.phase = 0; save(); render(); }
+    else { transient = { batch: true, batchPhase: phase === 3 ? 3 : 2 }; render(); window.scrollTo({ top: 0 }); }
+  } else { phase = phase < 3 ? phase + 1 : nextPhase(p); current.phase = phase; resetTransient(); save(); render(); window.scrollTo({ top: 0 }); }
+}
 function tickTimer() {
-  const seconds = timerSeconds(state.timer);
-  if (state.timer.running && seconds === 0) {
-    state.timer.running = false; state.timer.remaining = 0; state.timer.endsAt = null;
-    save(); toast('这一段专注结束了。伸个懒腰，再看看哪些知识真正留了下来。');
-  }
-  const formatted = formatTime(seconds);
-  $('#timer-display').textContent = formatted;
-  $('#timer-caption').textContent = state.timer.running ? '专注当下，不必赶路' : seconds === 0 ? '给自己一点休息时间' : seconds < 3600 ? '暂停一下，也是一种进步' : '按自己的节奏，也很好';
-  $('#timer-toggle').setAttribute('aria-label', state.timer.running ? '暂停专注计时' : seconds === 0 ? '重新开始专注计时' : '开始专注计时');
-  $('#timer-toggle').innerHTML = state.timer.running ? '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4h3v12H6zm5 0h3v12h-3z" fill="currentColor"/></svg>' : '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 9 6-9 6Z" fill="currentColor"/></svg>';
-  if ($('#lesson-clock')) $('#lesson-clock').textContent = formatted;
-  if ($('#lesson-timer-toggle')) $('#lesson-timer-toggle').textContent = state.timer.running ? '暂停' : '继续';
+  const seconds = timerSeconds(timer);
+  if (timer.running && seconds === 0) { timer.running = false; timer.remaining = 0; timer.endsAt = null; saveTimer(); toast('专注时间到了。休息一下，再检查今天留下了什么。'); }
+  if ($('#timer-value')) $('#timer-value').textContent = formatTime(seconds);
+  if ($('#timer-toggle')) { $('#timer-toggle').innerHTML = timer.running ? icons.pause : icons.play; $('#timer-toggle').setAttribute('aria-label', timer.running ? '暂停专注计时' : '开始专注计时'); }
 }
 function toggleTimer() {
-  if (state.timer.running) {
-    state.timer.remaining = timerSeconds(state.timer); state.timer.running = false; state.timer.endsAt = null;
-  } else {
-    if (!state.timer.remaining) state.timer.remaining = 3600;
-    state.timer.endsAt = Date.now() + state.timer.remaining * 1000; state.timer.running = true;
-  }
-  save(); tickTimer();
+  if (timer.running) { timer.remaining = timerSeconds(timer); timer.running = false; timer.endsAt = null; }
+  else { if (!timer.remaining) timer.remaining = 3600; timer.endsAt = Date.now() + timer.remaining * 1000; timer.running = true; }
+  saveTimer(); tickTimer();
 }
-function pauseTimer() {
-  if (state.timer.running) toggleTimer();
-}
-
-function openLesson(id, reviewId = null) {
-  if (!getCourse(id)) return;
-  selectTopic(id);
-  const review = reviewId ? state.reviews.find(r => r.id === reviewId) : null;
-  const p = state.modules[id], c = getCourse(id);
-  lesson = { id, phase: review ? 3 : isMastered(p) ? 0 : nextPhase(p), reviewId: review?.id || null, view: 'content', checks: {
-    understanding: p.understandingReviewed ? c.understandingChecks.map((_, i) => i) : [],
-    practice: p.practicePassed ? c.variants[p.variant].rubric.map((_, i) => i) : [],
-    recall: !review && p.recallReviewed ? c.recallRubric.map((_, i) => i) : []
-  }, feedback: p.practicePassed ? { status: 'recognized', title: '你的练习自检已保存。', text: '可以核对标准思路，然后进入闭卷回忆。' } : null, understandingOpen: false, recallOpen: false, reviewDraft: '', reviewChecked: false };
-  renderLesson();
-  $('#lesson-dialog').showModal();
-  if (!state.timer.running && state.timer.remaining === 3600) toggleTimer();
-}
-function closeLesson() { $('#lesson-dialog').close(); lesson = null; renderHome(); }
-const phaseLabel = index => `0${index + 1} / ${phases[index].english}`;
-function lessonFrame(content) {
-  const c = getCourse(lesson.id), p = state.modules[c.id];
-  return `<div class="lesson-shell"><aside class="lesson-sidebar"><a href="#" class="lesson-brand" data-action="close">知序<span style="font-family:var(--latin);font-size:13px;letter-spacing:0;margin-left:9px">study studio</span></a><span class="eyebrow">YOUR LEARNING PATH</span><h3>${c.title}</h3><nav class="lesson-stage-nav" aria-label="学习阶段">${phases.map((phase, i) => `<button class="lesson-stage-button ${i === lesson.phase ? 'current' : ''}" data-action="phase" data-phase="${i}" ${i > nextPhase(p) && !lesson.reviewId ? 'disabled' : ''} ${lesson.reviewId && i !== 3 ? 'disabled' : ''} ${i === lesson.phase ? 'aria-current="step"' : ''}><span>${p.completed[i] ? '✓' : '○'}</span>${phase.title}<span>${phase.minutes}′</span></button>`).join('')}</nav><div class="sidebar-bottom"><p>不急着走完，<br>只认真走好每一步。</p><button class="text-button" data-action="defer">把这个知识点留到明天 ↗</button><div class="local-label">内置课程引导 · 本机保存<br>学习记录由你的练习与自检确认</div></div></aside><div class="lesson-main"><div class="lesson-topbar"><span class="eyebrow">${lesson.reviewId ? 'SPACED REPETITION / 温故知新' : phaseLabel(lesson.phase)}</span><div class="lesson-tools"><span class="lesson-clock" id="lesson-clock">${formatTime(timerSeconds(state.timer))}</span><button class="lesson-pause" id="lesson-timer-toggle" data-action="timer">${state.timer.running ? '暂停' : '继续'}</button><button class="icon-button" data-action="close" aria-label="关闭学习面板">×</button></div></div>${content}</div></div>`;
-}
-function paceControls() {
-  const p = state.modules[lesson.id];
-  return `<div class="pace-selector"><span>目前的节奏，对你来说怎么样？</span>${[['slow', '慢一点'], ['normal', '刚刚好'], ['fast', '快一点']].map(([value, label]) => `<button data-action="pace" data-pace="${value}" aria-pressed="${p.pace === value}">${label}</button>`).join('')}<button data-action="rest">休息一下 ↗</button></div>`;
-}
-function checksHTML(items, type) {
-  return `<div class="self-checks">${items.map((text, i) => `<label><input type="checkbox" data-check="${type}" data-index="${i}" ${lesson.checks[type]?.includes(i) ? 'checked' : ''}/><span>${text}</span></label>`).join('')}</div>`;
-}
-function allChecked(type, length) { return lesson.checks[type]?.length === length; }
-function understandingHTML() {
-  const c = getCourse(lesson.id), p = state.modules[c.id];
-  return `<h2 id="lesson-title" class="lesson-title">${c.conceptTitle}</h2><p class="lesson-subtitle">${phases[0].description} 今天只需要弄懂这一件事。</p><div class="concept-block"><h4>${c.title}</h4>${p.pace === 'fast' ? `<p>${c.concise}</p>` : c.concept}<div class="concept-visual">${art[c.id]}<p>${c.visualCaption}</p></div></div>${p.pace === 'slow' ? `<p class="deeper-note">${c.deeper}</p>` : ''}<div class="self-question"><label for="understanding-answer">先停一下，试着解释给自己听。</label><p>${c.question}</p><textarea id="understanding-answer" class="answer-input" data-draft="0" maxlength="12000" placeholder="不用追求完美，用自己的话写下你的理解……">${e(p.drafts[0])}</textarea><div class="answer-actions"><span class="dialog-footnote" style="margin:0">写下来，能帮你发现真正的卡点。</span><button class="secondary-button" data-action="understanding-check">对照自检 ↗</button></div></div>${lesson.understandingOpen || p.understandingReviewed ? `<div class="feedback-box"><h4>把概念放回自己的语言里。</h4><p>${c.understandingChecks[0]}</p>${checksHTML(c.understandingChecks, 'understanding')}</div>` : ''}${paceControls()}<div class="lesson-footer"><p>○ 理解后再继续，无需赶时间。</p><button class="primary-button" data-action="next" ${!(p.understandingReviewed && p.drafts[0].trim().length >= 8) && !p.completed[0] ? 'disabled' : ''}>理解了，看看例题 <span>↗</span></button></div>`;
-}
-function exampleHTML() {
-  const c = getCourse(lesson.id), p = state.modules[c.id];
-  return `<h2 id="lesson-title" class="lesson-title">看见答案背后的思考。</h2><p class="lesson-subtitle">不急着记住步骤。先试着解释：这一步，为什么要这样做？</p><div class="practice-question">${c.examplePrompt}</div><ol class="example-steps">${c.steps.map(([title, detail]) => `<li><strong>${title}</strong>${p.pace !== 'fast' ? `<p>${detail}</p>` : `<p>${detail.split('。')[0]}。</p>`}</li>`).join('')}</ol>${p.pace === 'slow' ? `<p class="deeper-note">如果有一步卡住，先回到“建立理解”看一看。不用把已经懂的部分重新学一遍。</p>` : ''}${paceControls()}<div class="lesson-footer"><p>确认能解释每一步后，再开始尝试。</p><button class="primary-button" data-action="next">我理解了，自己试试 <span>↗</span></button></div>`;
-}
-function practiceHTML() {
-  const c = getCourse(lesson.id), p = state.modules[c.id], v = c.variants[p.variant];
-  const feedback = lesson.feedback;
-  const canCheck = feedback && ['recognized', 'manual'].includes(feedback.status);
-  return `<h2 id="lesson-title" class="lesson-title">这一次，把思考交给自己。</h2><p class="lesson-subtitle">答案先收好。遇到困难，先写下确定的那一步，再按需查看提示。</p><div class="practice-question">${v.prompt}<p>请写出完整思路，不只是最终答案。</p></div><label class="answer-label" for="practice-answer">我的解题过程</label><textarea id="practice-answer" class="answer-input" data-draft="2" maxlength="12000" rows="5" placeholder="在这里自由书写。可以分行、列式，也可以先描述你的想法。">${e(p.drafts[2])}</textarea><div class="answer-actions"><button class="secondary-button" data-action="hint" ${p.hints >= 4 ? 'disabled' : ''}>${p.hints === 0 ? '给我一点提示' : p.hints === 3 ? '确实需要，查看完整解答' : p.hints >= 4 ? '提示已全部展开' : '再提示一点'} <span>${Math.min(p.hints, 4)} / 4</span></button><button class="primary-button" data-action="practice-check">检查我的思路 <span>↗</span></button></div>${p.hints > 0 ? `<div class="hint-list">${v.hints.slice(0, p.hints).map((hint, i) => `<div class="hint-card"><small>${['01 / 概念提示', '02 / 方法提示', '03 / 下一步提示'][i]}</small>${hint}</div>`).join('')}${p.hints === 4 ? `<div class="hint-card"><small>04 / 完整解答</small><p style="white-space:pre-line">${v.solution}</p></div>` : ''}</div><p class="hint-notice">用过提示的部分值得再见一次，已加入明天的复习。它不代表整道题失败。${p.hints === 4 ? '看过解答后，请换一道题独立尝试，再确认完成。' : ''}</p>` : ''}${feedback ? `<div class="feedback-box" role="status"><h4>${feedback.title}</h4><p>${feedback.text}</p>${canCheck && !p.practicePassed ? `${checksHTML(v.rubric, 'practice')}<button class="secondary-button" data-action="practice-confirm" ${!allChecked('practice', v.rubric.length) || p.hints === 4 ? 'disabled' : ''}>我已逐项确认</button>` : ''}${p.practicePassed ? `<div class="standard-answer"><strong>✓ 已完成练习自检 · 标准思路</strong>\n${v.solution}</div><div class="next-choices"><button class="primary-button" data-action="next">进入闭卷回忆 <span>↗</span></button><button class="secondary-button" data-action="another">再练一道题</button></div><p class="practice-benefit">再练一题的预计收益：${p.hints ? '高' : p.variant === 0 ? '中' : '低'}。${p.variant === 0 ? '换一组条件，检验能否迁移方法，补足“看懂但还不熟练”的部分。' : '同类问题的收益正在降低，可以优先进入回忆阶段。'}</p>` : ''}</div>` : ''}${p.hints === 4 ? '<button class="secondary-button" data-action="another">换一道题，独立尝试 ↗</button>' : ''}<div class="weakness-options"><button data-action="weakness" data-weakness="concept">概念还不清楚</button><button data-action="weakness" data-weakness="method">步骤卡住了</button><button data-action="defer">这题先放一放</button><button data-action="rest">有点累了，休息一下</button></div>`;
-}
-function recallHTML() {
-  const c = getCourse(lesson.id), p = state.modules[c.id];
-  const draft = lesson.reviewId ? lesson.reviewDraft : p.drafts[3];
-  const reviewed = lesson.reviewId ? lesson.reviewChecked : p.recallReviewed;
-  return `${lesson.reviewId ? '<span class="review-session-label">间隔复习 · 每次回想，都在加深连接</span>' : ''}<h2 id="lesson-title" class="lesson-title">合上资料，看看留下了什么。</h2><p class="lesson-subtitle">不用一字不差。能独立解释，并在新情境里使用，才是这一次的目标。</p><div class="recall-start"><span aria-hidden="true">↺</span><h4>先回忆，再核对。</h4><p>暂时不翻前面的内容。试着从记忆中，回答这三个问题。</p></div><ol class="recall-prompts">${c.recallQuestions.map(q => `<li>${q}</li>`).join('')}</ol><label class="answer-label" for="recall-answer">此刻，我能想起来的</label><textarea id="recall-answer" class="answer-input" data-draft="3" maxlength="12000" rows="5" placeholder="用自己的话写下来。忘记的部分也值得记录，复习会更有方向。">${e(draft)}</textarea><div class="answer-actions"><button class="text-button" data-action="defer">还不够熟，留到明天 ↗</button><button class="secondary-button" data-action="recall-check">写好了，对照自检 ↗</button></div>${lesson.recallOpen || reviewed ? `<div class="feedback-box"><h4>先诚实地检查，再认可自己的进步。</h4><p>${c.recallAnswer}</p>${checksHTML(c.recallRubric, 'recall')}<p>若有一项还不确定，回到对应阶段即可，不必全部重新开始。</p></div><div class="weakness-options"><button data-action="weakness" data-weakness="concept">只补一下概念</button><button data-action="weakness" data-weakness="method">再看一遍例题</button></div>` : ''}<div class="lesson-footer"><p>${lesson.reviewId ? '本次回忆也需要独立完成与自检。' : '四阶段均确认后，模块才会由 ○ 变为 ✓。'}</p><button class="primary-button" data-action="finish" ${!reviewed || draft.trim().length < 16 ? 'disabled' : ''}>${lesson.reviewId ? '完成这次复习' : '确认掌握，完成模块'} <span>✓</span></button></div>`;
-}
-function completionHTML() {
-  const c = getCourse(lesson.id);
-  return `<div class="completion"><div class="completion-mark">✓</div><h2 id="lesson-title">这一步，真正属于你了。</h2><p>${c.title} · ${lesson.reviewId ? '本次回忆已完成' : '四个阶段已完成自检'}<br>${lesson.reviewId ? '每次主动回想，都让知识更容易被再次唤起。' : '从直觉到独立运用，今天的认真已经留下痕迹。接下来，让时间帮你加深记忆。'}</p>${!lesson.reviewId ? '<div class="completion-reviews"><span>+1<small>明天再回想</small></span><span>+3<small>几天后巩固</small></span><span>+7<small>一周后迁移</small></span></div><p>复习已经安排好。无需重学一遍，只温故需要的部分。</p>' : ''}<button class="primary-button" data-action="close">回到我的学习空间 <span>↗</span></button></div>`;
-}
-function restHTML() { return `<div class="rest-panel"><div class="rest-symbol" aria-hidden="true"><svg class="spark-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M20 4v32M4 20h32M8.7 8.7l22.6 22.6M8.7 31.3 31.3 8.7"/></svg></div><h3 id="lesson-title">暂停，也在学习的节奏里。</h3><p>放下肩膀，看看远处，慢慢呼吸。<br>计时已暂停，写下的内容也已保存。<br>不需要现在解决每一个问题。</p><button class="primary-button" data-action="resume">准备好了，继续学习 <span>↗</span></button><div style="margin-top:20px"><button class="text-button" data-action="close">今天先到这里，稍后继续 ↗</button></div></div>`; }
-function renderLesson(scroll = false) {
-  if (!lesson) return;
-  const content = lesson.view === 'complete' ? completionHTML() : lesson.view === 'rest' ? restHTML() : [understandingHTML, exampleHTML, practiceHTML, recallHTML][lesson.phase]();
-  $('#lesson-root').innerHTML = lessonFrame(content);
-  if (scroll) {
-    $('#lesson-dialog').scrollTo({ top: 0 });
-    const title = $('#lesson-title');
-    title?.setAttribute('tabindex', '-1');
-    title?.focus({ preventScroll: true });
-  }
-}
-function goToPhase(index) {
-  const p = state.modules[lesson.id];
-  if (lesson.reviewId && index !== 3 || index > nextPhase(p)) return;
-  lesson.phase = index; lesson.view = 'content'; lesson.feedback = null;
-  if (index === 2 && p.practicePassed) lesson.feedback = { status: 'recognized', title: '你的练习自检已保存。', text: '可以核对标准思路，然后进入闭卷回忆。' };
-  renderLesson(true);
-}
-function moveNext() {
-  const p = state.modules[lesson.id];
-  if (!completePhase(p, lesson.phase)) { toast('先完成当前阶段的练习与自检，再继续。'); return; }
-  const next = Math.min(lesson.phase + 1, 3);
-  save(); renderHome(); goToPhase(next);
-  announce(`已进入${phases[next].title}`);
-}
-function finish() {
-  const p = state.modules[lesson.id];
-  if (lesson.reviewId) {
-    if (!lesson.reviewChecked || lesson.reviewDraft.trim().length < 16) return;
-    const r = state.reviews.find(r => r.id === lesson.reviewId);
-    if (r) r.done = true;
-  } else {
-    const wasMastered = isMastered(p);
-    if (!completePhase(p, 3)) return;
-    if (!wasMastered) scheduleReviews(state, lesson.id);
-  }
-  pauseTimer(); save(); renderHome(); lesson.view = 'complete'; renderLesson(true);
-  announce(lesson.reviewId ? '本次复习已完成' : '模块已完成，已安排间隔复习');
+function pauseTimer() { if (timer.running) toggleTimer(); }
+function showReviews() {
+  const items = current.reviews.filter(r => !r.done).sort((a, b) => a.due.localeCompare(b.due));
+  $('#reviews-list').innerHTML = items.length ? items.map(r => `<button class="review-row" data-review="${e(r.id)}"><span>${e(r.due.slice(5).replace('-', ' / '))}</span><span><strong>${e(current.sections.find(s => s.id === r.sectionId)?.title || '')}</strong><small>${e(r.reason)} · ${r.due <= localDate() ? '可以开始了' : '也可以提前回忆'}</small></span><span>↗</span></button>`).join('') : '<p class="empty-note">完成一个模块后，这里会安排第 1、3、7 天的回忆。使用过提示的部分，也会单独加入复习。</p>';
+  $('#reviews-dialog').showModal();
 }
 
-$('#lesson-root').addEventListener('input', event => {
-  const input = event.target.closest('[data-draft]');
-  if (!input || !lesson) return;
-  const p = state.modules[lesson.id];
-  const phase = Number(input.dataset.draft);
-  if (lesson.reviewId && phase === 3) lesson.reviewDraft = input.value;
-  else p.drafts[phase] = input.value;
-  if (phase === 0) {
-    p.understandingReviewed = false;
-    lesson.checks.understanding = [];
-    document.querySelectorAll('[data-check="understanding"]').forEach(c => { c.checked = false; });
-    const button = $('[data-action="next"]', $('#lesson-root'));
-    if (button && !p.completed[0]) button.disabled = true;
+$('#reading').addEventListener('input', event => {
+  if (event.target.matches('[data-batch-draft]')) {
+    const p = current.sections[Number(event.target.dataset.batchDraft)].progress, i = transient.batchPhase;
+    p.drafts[i] = event.target.value; if (i === 2) p.practicePassed = false; else p.recallReviewed = false; save(); return;
   }
-  if (phase === 2) {
-    p.practicePassed = false;
-    lesson.feedback = null;
-    lesson.checks.practice = [];
-    $('.feedback-box', $('#lesson-root'))?.remove();
-  }
-  if (phase === 3) {
-    if (lesson.reviewId) lesson.reviewChecked = false;
-    else p.recallReviewed = false;
-    lesson.checks.recall = [];
-    document.querySelectorAll('[data-check="recall"]').forEach(c => { c.checked = false; });
-    const button = $('[data-action="finish"]');
-    if (button) button.disabled = true;
-  }
+  if (event.target.id !== 'study-answer') return;
+  const p = progress(), value = event.target.value;
+  if (reviewId && phase === 3) transient.reviewDraft = value; else p.drafts[phase] = value;
+  if (phase === 0) p.understandingReviewed = false;
+  if (phase === 1) p.exampleReviewed = false;
+  if (phase === 2) p.practicePassed = false;
+  if (phase === 3) { p.recallReviewed = false; transient.reviewChecked = false; }
+  transient.showCheck = false; transient.checks = []; transient.feedback = null;
+  $('.check-panel')?.remove();
+  $('[data-action="continue"]').disabled = !canContinue();
   save();
 });
-$('#lesson-root').addEventListener('change', event => {
-  const input = event.target.closest('[data-check]');
-  if (!input || !lesson) return;
-  const c = getCourse(lesson.id), p = state.modules[lesson.id], type = input.dataset.check;
-  lesson.checks[type] = [...$('#lesson-root').querySelectorAll(`[data-check="${type}"]:checked`)].map(c => Number(c.dataset.index));
-  if (type === 'understanding') {
-    p.understandingReviewed = allChecked(type, c.understandingChecks.length);
-    $('[data-action="next"]').disabled = !p.understandingReviewed || p.drafts[0].trim().length < 8;
+$('#reading').addEventListener('change', event => {
+  if (!event.target.matches('[data-check]')) return;
+  const checked = [...$('#reading').querySelectorAll('[data-check]:checked')].map(input => Number(input.dataset.check));
+  transient.checks = checked;
+  const all = checked.length === stageChecks().length, p = progress();
+  if (phase === 0) p.understandingReviewed = all;
+  if (phase === 1) p.exampleReviewed = all;
+  if (phase === 2) p.practicePassed = all && p.hints < 4;
+  if (phase === 3) { if (reviewId) transient.reviewChecked = all; else p.recallReviewed = all; }
+  if (phase === 2 && p.practicePassed && !$('.reference-answer')) {
+    $('.check-panel').insertAdjacentHTML('beforeend', `<details class="reference-answer"><summary>核对标准思路</summary><div class="prose">${referenceAnswer()}</div></details>`);
   }
-  if (type === 'practice') $('[data-action="practice-confirm"]').disabled = !allChecked(type, c.variants[p.variant].rubric.length) || p.hints === 4;
-  if (type === 'recall') {
-    const checked = allChecked(type, c.recallRubric.length);
-    if (lesson.reviewId) lesson.reviewChecked = checked;
-    else p.recallReviewed = checked;
-    $('[data-action="finish"]').disabled = !checked || (lesson.reviewId ? lesson.reviewDraft : p.drafts[3]).trim().length < 16;
-  }
-  save();
+  $('[data-action="continue"]').disabled = !canContinue(); save();
 });
-$('#lesson-root').addEventListener('click', event => {
-  const button = event.target.closest('[data-action]');
-  if (!button || !lesson) return;
-  event.preventDefault();
-  const c = getCourse(lesson.id), p = state.modules[c.id];
-  switch (button.dataset.action) {
-    case 'close': closeLesson(); break;
-    case 'timer': toggleTimer(); break;
-    case 'phase': goToPhase(Number(button.dataset.phase)); break;
-    case 'pace': p.pace = button.dataset.pace; save(); renderLesson(); toast(p.pace === 'slow' ? '放慢一点。已补充直觉解释与思考提醒。' : p.pace === 'fast' ? '节奏加快了。保留关键逻辑，减少重复讲解。' : '保持现在的节奏，一步一步来。'); break;
-    case 'rest': pauseTimer(); lesson.view = 'rest'; renderLesson(true); break;
-    case 'resume': lesson.view = 'content'; if (!state.timer.running && state.timer.remaining > 0) toggleTimer(); renderLesson(true); break;
-    case 'understanding-check':
-      if (p.drafts[0].trim().length < 8) { toast('先用自己的话写一点理解，至少 8 个字。'); $('#understanding-answer').focus(); break; }
-      lesson.understandingOpen = true; renderLesson(); $('.feedback-box')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
-    case 'next': moveNext(); break;
+$('#workspace').addEventListener('click', event => {
+  const batchTab = event.target.closest('[data-batch-phase]'), batchStart = event.target.closest('[data-batch-start]');
+  if (batchTab) { transient.batchPhase = Number(batchTab.dataset.batchPhase); renderReading(); return; }
+  if (batchStart) { const i = Number(batchStart.dataset.batchStart), target = transient.batchPhase; current.selected = i; phase = target; current.phase = phase; transient = { fromBatch: true }; save(); render(); window.scrollTo({ top: 0 }); return; }
+  const chapter = event.target.closest('[data-section]'), stage = event.target.closest('[data-phase]'), action = event.target.closest('[data-action]'), pace = event.target.closest('[data-pace]');
+  if (chapter) { openSection(Number(chapter.dataset.section)); return; }
+  if (stage) { goPhase(Number(stage.dataset.phase)); return; }
+  if (pace) { progress().pace = pace.dataset.pace; save(); renderReading(); toast(progress().pace === 'slow' ? '放慢一点，只处理当前这个问题。' : progress().pace === 'fast' ? '精简引导，按熟悉的节奏前进。' : '保持合适的节奏。'); return; }
+  if (event.target.closest('#timer-toggle')) { toggleTimer(); return; }
+  if (!action) return;
+  const p = progress();
+  switch (action.dataset.action) {
+    case 'check':
+      if (phase !== 1 && currentDraft().trim().length < (phase === 3 ? 16 : phase === 0 && current.mode === 'class' ? 1 : 8)) { toast(phase === 3 ? '先闭卷写下你的回忆，至少 16 个字，再核对。' : current.mode === 'class' && phase === 0 ? '先写下这道简单题的回答。' : '先写一点自己的尝试，至少 8 个字，再来检查。'); $('#study-answer').focus(); return; }
+      transient.showCheck = true; transient.checks = [];
+      if (phase === 2 && section().courseId) transient.feedback = evaluatePractice(section().courseId, p.variant, currentDraft());
+      renderReading(); $('.check-panel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
+    case 'continue': continueLearning(); break;
     case 'hint':
-      if (p.hints >= 4) break;
-      p.hints += 1; p.practicePassed = false; addReview(state, c.id, 1, '提示后巩固');
-      save(); renderReviews(); renderLesson(); $('.hint-list')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      announce(`已展开第 ${p.hints} 级提示`); break;
-    case 'practice-check':
-      lesson.feedback = evaluatePractice(c.id, p.variant, p.drafts[2]);
-      lesson.checks.practice = [];
-      save(); renderLesson(); $('.feedback-box')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
-    case 'practice-confirm':
-      if (!allChecked('practice', c.variants[p.variant].rubric.length) || p.hints === 4) break;
-      p.practicePassed = true; save(); renderLesson(); $('.feedback-box')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
-    case 'another':
-      p.variant = p.variant === 0 ? 1 : 0; p.hints = 0; p.drafts[2] = ''; p.practicePassed = false;
-      lesson.feedback = null; lesson.checks.practice = []; save(); renderLesson(true); break;
-    case 'weakness':
-      if (lesson.reviewId) { lesson.reviewId = null; lesson.reviewDraft = ''; lesson.reviewChecked = false; }
-      goToPhase(button.dataset.weakness === 'concept' ? 0 : 1);
-      p.pace = 'slow'; save(); renderLesson(true); toast('只回到需要巩固的部分。其他学习记录保留。'); break;
-    case 'defer':
-      addReview(state, c.id, 1, '稍后再学'); pauseTimer(); save(); closeLesson(); toast('已留到明天。写过的思路已保存，先给自己一点空间。'); break;
-    case 'recall-check': {
-      const draft = lesson.reviewId ? lesson.reviewDraft : p.drafts[3];
-      if (draft.trim().length < 16) { toast('先闭卷写下你的回忆，至少 16 个字，再来核对。'); $('#recall-answer').focus(); break; }
-      lesson.recallOpen = true; renderLesson(); $('.feedback-box')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
-    }
-    case 'finish': finish(); break;
+      if (p.hints >= 4) return;
+      p.hints++; p.practicePassed = false; transient.checks = []; materialReview(current, section().id, [1], '提示后巩固'); save(); renderReading(); $('.hints')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
+    case 'retry':
+      p.hints = 0; p.drafts[2] = ''; p.practicePassed = false;
+      if (section().courseId) p.variant = p.variant === 0 ? 1 : 0;
+      resetTransient(); save(); renderReading(); $('#study-answer').focus(); break;
+    case 'defer': materialReview(current, section().id, [1], '稍后再学'); pauseTimer(); save(); renderSidebar(); toast('已留到明天。其他进度保留，不必从头开始。'); break;
+    case 'rest': pauseTimer(); save(); $('#rest-dialog').showModal(); break;
+    case 'reset-timer': timer = { remaining: 3600, running: false, endsAt: null }; saveTimer(); tickTimer(); break;
+    case 'reviews': showReviews(); break;
+    case 'sound': setSoundEnabled(!soundEnabled()); renderSidebar(); break;
+    case 'batch': transient = { batch: true, batchPhase: phase === 3 ? 3 : 2 }; render(); window.scrollTo({ top: 0 }); break;
+    case 'next-section': if (current.mode === 'class') { transient = { batch: true, batchPhase: 3 }; render(); break; } openSection(current.selected < current.sections.length - 1 ? current.selected + 1 : current.selected); break;
   }
 });
-
-$('#start-learning').addEventListener('click', () => openLesson(state.selected));
-$('#change-topic').addEventListener('click', () => { renderTopics(); $('#topic-dialog').showModal(); });
-$('#topic-options').addEventListener('click', event => {
-  const option = event.target.closest('[data-topic]');
-  if (!option) return;
-  selectTopic(option.dataset.topic); $('#topic-dialog').close(); toast(`今天，就来弄懂「${selectedCourse().title}」。`);
+$('#mode-switch').addEventListener('change', event => { current.mode = event.target.value; importMode = current.mode; if (current.mode === 'class' && phase === 1) phase = 0; resetTransient(); save(); render(); toast(current.mode === 'class' ? '课上自学：概念配一道简单题，练习与复习放到课后集中做。' : '自学：保留四阶段学习，目录与阶段都可以自由选择。'); });
+document.querySelectorAll('[name="import-mode"]').forEach(input => input.addEventListener('change', () => { importMode = input.value; }));
+$('#open-studio').addEventListener('click', showLibrary);
+$('#back-home').addEventListener('click', home);
+$('#open-library').addEventListener('click', showLibrary);
+$('#pick-file').addEventListener('click', () => $('#file-input').click());
+$('#upload-another').innerHTML = icons.upload;
+$('#upload-another').addEventListener('click', () => { showLibrary(); $('#file-input').click(); });
+$('#upload-icon').innerHTML = icons.upload;
+$('#file-input').addEventListener('change', event => importFile(event.target.files[0]));
+$('#open-sample').addEventListener('click', openSample);
+$('#open-builtin').addEventListener('click', openBuiltin);
+$('#saved-materials').addEventListener('click', event => { const button = event.target.closest('[data-material]'); if (button) openMaterial(materials.find(m => m.id === button.dataset.material)); });
+$('#toc-toggle').addEventListener('click', toggleSidebar);
+$('#sidebar-backdrop').addEventListener('click', toggleSidebar);
+$('#resume-learning').addEventListener('click', () => $('#rest-dialog').close());
+$('#reviews-list').addEventListener('click', event => {
+  const button = event.target.closest('[data-review]'); if (!button) return;
+  const r = current.reviews.find(r => r.id === button.dataset.review);
+  current.selected = current.sections.findIndex(s => s.id === r.sectionId); phase = 3; reviewId = r.id; resetTransient();
+  $('#reviews-dialog').close(); render(); window.scrollTo({ top: 0 });
 });
-$('#module-grid').addEventListener('click', event => {
-  const course = event.target.closest('[data-course]');
-  if (course) openLesson(course.dataset.course);
-  if (event.target.closest('#show-all-modules')) setFilter('all');
+document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => { if (!busy) button.closest('dialog').close(); }));
+document.querySelectorAll('dialog').forEach(dialog => {
+  dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+  dialog.addEventListener('click', event => {
+    const r = dialog.getBoundingClientRect();
+    if (!busy && event.target === dialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) dialog.close();
+  });
 });
-$('.filter-tabs').addEventListener('click', event => {
-  const button = event.target.closest('[data-filter]');
-  if (button) setFilter(button.dataset.filter);
+let dragDepth = 0;
+document.addEventListener('dragenter', event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); dragDepth++; $('#drop-overlay').hidden = false; } });
+document.addEventListener('dragover', event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } });
+document.addEventListener('dragleave', event => { if (event.dataTransfer?.types.includes('Files')) { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('#drop-overlay').hidden = true; } });
+document.addEventListener('drop', event => { event.preventDefault(); dragDepth = 0; $('#drop-overlay').hidden = true; if (event.dataTransfer.files.length > 1) toast('一次先专注一份资料，已读取第一个文件。'); importFile(event.dataTransfer.files[0]); });
+document.addEventListener('keydown', event => {
+  if (matchMedia('(max-width:760px)').matches && sidebarOpen && !$('#workspace').hidden) {
+    if (event.key === 'Escape') { sidebarOpen = false; updateSidebar(); $('#toc-toggle').focus(); }
+    if (event.key === 'Tab') {
+      const elements = [$('#toc-toggle'), ...$('#study-sidebar').querySelectorAll('button:not(:disabled)')];
+      const first = elements[0], last = elements.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  }
 });
-$('#review-list').addEventListener('click', event => {
-  const button = event.target.closest('[data-review]');
-  if (button) { const r = state.reviews.find(r => r.id === button.dataset.review); if (r) openLesson(r.moduleId, r.id); }
-  if (event.target.closest('#review-start')) openLesson(state.selected);
-});
-$('#timer-toggle').addEventListener('click', toggleTimer);
-$('#reset-timer').addEventListener('click', () => { state.timer = { remaining: 3600, running: false, endsAt: null }; save(); tickTimer(); toast('计时器已重置。学习进度仍然保留。'); });
-document.querySelectorAll('.method-button').forEach(button => button.addEventListener('click', () => $('#method-dialog').showModal()));
-document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
-document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('click', event => {
-  const r = dialog.getBoundingClientRect();
-  if (event.target === dialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) dialog.close();
-}));
-$('#lesson-dialog').addEventListener('close', () => {
-  // A queued close event can arrive after the learner has already reopened it.
-  if (!$('#lesson-dialog').open) { lesson = null; renderHome(); }
-});
-document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', () => {
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l === link));
-}));
-const observer = new IntersectionObserver(entries => {
-  const section = entries.find(entry => entry.isIntersecting)?.target.id;
-  if (section) document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.nav === section));
-}, { rootMargin: '-5% 0px -60% 0px', threshold: 0 });
-['today', 'modules', 'reviews'].forEach(id => observer.observe(document.getElementById(id)));
-$('#today-date').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase().replace(/ /g, ' / ');
+matchMedia('(max-width:760px)').addEventListener('change', event => { sidebarOpen = !event.matches; updateSidebar(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tickTimer(); });
-drawTorus(); renderHome(); tickTimer(); setInterval(tickTimer, 1000);
-if (!storageAvailable) toast('当前浏览器无法保存记录。你可以继续学习，本次进度只保留到页面关闭。');
+setInterval(tickTimer, 1000);
+async function init() {
+  try { materials = (await listMaterials()).filter(m => m && Array.isArray(m.sections) && m.sections.length); }
+  catch { storageFailure(); }
+  try { const id = sessionStorage.getItem('study-studio-current'); const old = materials.find(m => m.id === id); if (old) openMaterial(old); } catch { /* Home still works. */ }
+}
+init();

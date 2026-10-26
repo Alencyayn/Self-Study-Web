@@ -45,11 +45,11 @@ export function nextPhase(progress) {
   return index < 0 ? 3 : index;
 }
 export function isMastered(progress) { return progress.completed.every(Boolean); }
-export function completePhase(progress, phase) {
+export function completePhase(progress, phase, { unordered = false, understandingMinLength = 8 } = {}) {
   if (!Number.isInteger(phase) || phase < 0 || phase > 3) return false;
   if (progress.completed[phase]) return true;
-  if (progress.completed.slice(0, phase).some(done => !done)) return false;
-  if (phase === 0 && (!progress.understandingReviewed || progress.drafts[0].trim().length < 8)) return false;
+  if (!unordered && progress.completed.slice(0, phase).some(done => !done)) return false;
+  if (phase === 0 && (!progress.understandingReviewed || progress.drafts[0].trim().length < understandingMinLength)) return false;
   if (phase === 2 && !progress.practicePassed) return false;
   if (phase === 3 && (!progress.recallReviewed || progress.drafts[3].trim().length < 16)) return false;
   progress.completed[phase] = true;
