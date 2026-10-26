@@ -11,9 +11,9 @@ test('a real study document yields its own three headings and separate answer bl
   assert.deepEqual(doc.sections.map(s => s.title), ['4.3 — Basis', '4.4 — Coordinates', '4.5 — Dimension & Linear Independence']);
   const s = doc.sections[2];
   assert.ok(s.blocks.key.includes('\\mathbb{R}^n'));
-  assert.ok(s.blocks.practice.includes('6 个 polynomials'));
+  assert.ok(s.blocks.practice.includes('6 polynomials'));
   assert.ok(s.blocks.answer.includes('4\\times6'));
-  assert.ok(!s.blocks.key.includes('最多只能有'));
+  assert.ok(!s.blocks.key.includes('There can be at most'));
   assert.deepEqual(s.progress.completed, [false, false, false, false]);
 });
 
@@ -36,8 +36,8 @@ test('code fences do not create fake chapters or swallow answers', () => {
 });
 
 test('unsupported, empty and oversized files are rejected clearly', () => {
-  assert.throws(() => validateFile({ name: 'x.exe', size: 5 }), /支持 PDF/);
-  assert.throws(() => validateFile({ name: 'x.md', size: 0 }), /空的/);
+  assert.throws(() => validateFile({ name: 'x.exe', size: 5 }), /PDF, Markdown or TXT/);
+  assert.throws(() => validateFile({ name: 'x.md', size: 0 }), /empty/);
   assert.throws(() => validateFile({ name: 'x.pdf', size: 26 * 1024 * 1024 }), /25 MB/);
   assert.doesNotThrow(() => validateFile({ name: 'notes.PDF', size: 500 }));
 });

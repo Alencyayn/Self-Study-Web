@@ -32,7 +32,7 @@ function toast(text) {
 function announce(text) { $('#announcer').textContent = text; }
 function storageFailure() {
   storageOkay = false;
-  if (!storageWarned) { storageWarned = true; toast('当前浏览器暂时无法保存资料，本次仍可学习，关闭页面后记录可能丢失。'); }
+  if (!storageWarned) { storageWarned = true; toast('This browser cannot save your material right now. You can keep learning, but this session may be lost when you close the page.'); }
 }
 function save() {
   if (!current || !storageOkay) return;
@@ -48,12 +48,12 @@ function saveTimer() {
 function currentDraft() { return reviewId && phase === 3 ? transient.reviewDraft || '' : progress().drafts[phase]; }
 function stageChecks() {
   const s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
-  if (c) return phase === 0 ? c.understandingChecks : phase === 1 ? ['我能解释示范中的关键步骤，以及每一步为什么必要。'] : phase === 2 ? c.variants[progress().variant].rubric : c.recallRubric;
+  if (c) return phase === 0 ? c.understandingChecks : phase === 1 ? ['I can explain the key steps and why each one is necessary.'] : phase === 2 ? c.variants[progress().variant].rubric : c.recallRubric;
   return [
-    ['我能用自己的话解释这一节的核心概念。', '我能说明它为什么成立或在什么情况下有用。'],
-    ['我能解释示范中各个关键步骤的理由。', '我能区分已理解的部分和仍需要补充的部分。'],
-    ['我已独立写出完整思路，而不只是最后的结论。', '我已对照资料检查概念、推理和计算，修正了发现的问题。'],
-    ['我没有看资料，独立复述了核心概念或方法。', '我能解释为什么，并举出一个不同于资料的应用情境。', '我已核对资料，确认没有尚未解决的关键疑问。']
+    ['I can explain the core idea in my own words.', 'I can explain why it works or when it is useful.'],
+    ['I can explain the reasoning behind each key step.', 'I know which parts I understand and which need more work.'],
+    ['I wrote out my own reasoning, not just the final result.', 'I checked my concepts, reasoning and calculations against the material.'],
+    ['I recalled the core idea or method without looking at my notes.', 'I can explain why and apply it to a different situation.', 'I checked my recall and resolved the important gaps.']
   ][phase];
 }
 function checkedIndexes() {
@@ -72,14 +72,14 @@ function renderSidebar() {
   const s = section(), p = progress(), totalDone = current.sections.filter(s => isDone(s.progress)).length;
   const reviews = current.reviews.filter(r => !r.done);
   $('#study-sidebar').innerHTML = `
-    <div class="sidebar-intro"><p class="eyebrow">${e(current.title)} / STUDY BOOKMARK</p><h2>学习路线</h2><p class="sidebar-description">${e(current.description)}</p></div>
-    <nav class="contents-nav" aria-label="章节目录">${current.sections.map((item, i) => {
+    <div class="sidebar-intro"><p class="eyebrow">${e(current.title)} / STUDY BOOKMARK</p><h2>Learning path</h2><p class="sidebar-description">${e(current.description)}</p></div>
+    <nav class="contents-nav" aria-label="Table of contents">${current.sections.map((item, i) => {
       const done = isDone(item.progress), active = i === current.selected;
-      const status = done ? '已完成 · 已通过回忆自检' : active ? `当前位置 · ${phases[phase].title}` : countDone(item.progress) > 0 ? `已学习 · 待${phases[nextRequired(item.progress)].title}` : '尚未开始';
-      return `<button class="chapter-link ${active ? 'current' : ''}" data-section="${i}" ${active ? 'aria-current="location"' : ''}><span class="chapter-marker ${done ? 'status-circle is-complete' : active ? 'bookmark-icon' : 'status-circle'}" aria-label="${done ? '已完成' : '未完成'}">${!done && active ? icons.bookmark : ''}</span><span><strong>${e(item.title)}</strong><small>${status}</small></span></button>`;
+      const status = done ? 'Complete · Recall checked' : active ? `Current · ${phases[phase].title}` : countDone(item.progress) > 0 ? `Next · ${phases[nextRequired(item.progress)].title}` : 'Not started';
+      return `<button class="chapter-link ${active ? 'current' : ''}" data-section="${i}" ${active ? 'aria-current="location"' : ''}><span class="chapter-marker ${done ? 'status-circle is-complete' : active ? 'bookmark-icon' : 'status-circle'}" aria-label="${done ? 'Complete' : 'Not complete'}">${!done && active ? icons.bookmark : ''}</span><span><strong>${e(item.title)}</strong><small>${status}</small></span></button>`;
     }).join('')}</nav>
-    ${current.mode === 'class' ? '<button class="batch-link" data-action="batch">课后集中练习 <span>↗</span></button>' : ''}<div class="current-module"><p class="eyebrow">CURRENT MODULE / ${current.mode === 'class' ? '课上自学' : '自学'}</p><nav class="phase-nav" aria-label="当前模块的学习阶段">${phases.map((item, i) => !requiredPhases(current.mode).includes(i) ? '' : `<button class="stage-link ${phase === i ? 'current' : ''}" data-phase="${i}" ${reviewId && i !== 3 ? 'disabled' : ''} ${phase === i ? 'aria-current="step"' : ''}><span class="status-circle ${p.completed[i] ? 'is-complete' : phase === i ? 'is-current' : ''}" aria-label="${p.completed[i] ? '已完成' : '未完成'}"></span><span>0${requiredPhases(current.mode).indexOf(i) + 1} — ${['Understanding', 'Worked Examples', 'Independent Practice', 'Active Recall'][i]}</span></button>`).join('')}</nav><p class="progress-note">${current.mode === 'class' ? '课上理解，课后集中练习与回忆。<br>三个环节均完成后，模块圆点才会填满。' : '完成全部四阶段自检后，<br>模块圆点才会填满。'}</p><p class="progress-summary">${totalDone} / ${current.sections.length} 个模块已完成</p></div>
-    <div class="sidebar-footer"><div class="focus-timer"><button class="timer-control" id="timer-toggle" aria-label="${timer.running ? '暂停专注计时' : '开始专注计时'}">${timer.running ? icons.pause : icons.play}</button><span id="timer-value">${formatTime(timerSeconds(timer))}</span><button class="plain-button reset-timer" data-action="reset-timer" aria-label="重置计时器">↺</button><button class="plain-button rest-button" data-action="rest">休息一下</button></div><button class="sidebar-review-link" data-action="reviews">复习安排 <span>${reviews.length ? String(reviews.length).padStart(2, '0') : '—'}</span></button><button class="sound-preference" data-action="sound" aria-pressed="${soundEnabled()}">庆祝音效 <span>${soundEnabled() ? '开' : '关'}</span></button></div>`;
+    ${current.mode === 'class' ? '<button class="batch-link" data-action="batch">After-class practice <span>↗</span></button>' : ''}<div class="current-module"><p class="eyebrow">CURRENT MODULE / ${current.mode === 'class' ? 'In class' : 'Self-study'}</p><nav class="phase-nav" aria-label="Learning stages for this section">${phases.map((item, i) => !requiredPhases(current.mode).includes(i) ? '' : `<button class="stage-link ${phase === i ? 'current' : ''}" data-phase="${i}" ${reviewId && i !== 3 ? 'disabled' : ''} ${phase === i ? 'aria-current="step"' : ''}><span class="status-circle ${p.completed[i] ? 'is-complete' : phase === i ? 'is-current' : ''}" aria-label="${p.completed[i] ? 'Complete' : 'Not complete'}"></span><span>0${requiredPhases(current.mode).indexOf(i) + 1} — ${['Understanding', 'Worked Examples', 'Independent Practice', 'Active Recall'][i]}</span></button>`).join('')}</nav><p class="progress-note">${current.mode === 'class' ? 'Learn along now. Practise and recall later.<br>Finish all three steps to complete a section.' : 'Complete all four steps to fill the circle.'}</p><p class="progress-summary">${totalDone} of ${current.sections.length} sections complete</p></div>
+    <div class="sidebar-footer"><div class="focus-timer"><button class="timer-control" id="timer-toggle" aria-label="${timer.running ? 'Pause focus timer' : 'Start focus timer'}">${timer.running ? icons.pause : icons.play}</button><span id="timer-value">${formatTime(timerSeconds(timer))}</span><button class="plain-button reset-timer" data-action="reset-timer" aria-label="Reset timer">↺</button><button class="plain-button rest-button" data-action="rest">Take a break</button></div><button class="sidebar-review-link" data-action="reviews">Review schedule <span>${reviews.length ? String(reviews.length).padStart(2, '0') : '—'}</span></button><button class="sound-preference" data-action="sound" aria-pressed="${soundEnabled()}">Celebration sound <span>${soundEnabled() ? 'On' : 'Off'}</span></button></div>`;
   updateSidebar();
 }
 function updateSidebar() {
@@ -89,7 +89,7 @@ function updateSidebar() {
   $('#study-sidebar').inert = !sidebarOpen;
   $('#toc-toggle').innerHTML = sidebarOpen ? icons.sidebar : icons.expand;
   $('#toc-toggle').setAttribute('aria-expanded', String(sidebarOpen));
-  $('#toc-toggle').setAttribute('aria-label', sidebarOpen ? '收起目录' : '展开目录');
+  $('#toc-toggle').setAttribute('aria-label', sidebarOpen ? 'Hide contents' : 'Show contents');
   $('#sidebar-backdrop').hidden = !(mobile && sidebarOpen);
   document.body.classList.toggle('mobile-sidebar-open', mobile && sidebarOpen && !$('#workspace').hidden);
 }
@@ -102,20 +102,20 @@ function bodyForPhase() {
     return '';
   }
   if (phase === 0) return markdown(s.blocks.key || s.body);
-  if (phase === 1) return s.blocks.example ? markdown(s.blocks.example) : `<p class="source-note">这份资料没有单独标注完整例题。选一个其中的例子、证明或操作过程，逐步解释它为什么成立。</p>${markdown(s.blocks.key || s.body)}`;
+  if (phase === 1) return s.blocks.example ? markdown(s.blocks.example) : `<p class="source-note">This material does not label a worked example. Choose an example, proof or process from it and explain why each step works.</p>${markdown(s.blocks.key || s.body)}`;
   return '';
 }
 function questionForPhase() {
   const s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
   if (phase === 0 && current.mode === 'class') {
-    const simple = c ? { kernel: '零向量一定在核里吗？用一句话解释为什么。', derivative: '物体的速度为零，就说明它的位置为零吗？', recursion: '阶乘函数遇到 n ≤ 1 就返回 1，这是终止条件，还是继续递归的步骤？' }[c.id] : current.id === 'sample-vector-spaces' ? ['标准基 {(1, 0), (0, 1)} 包含几个向量？', '若 v = 2b₁ + 3b₂，那么 [v]ᵦ 的两个坐标是什么？', 'P₃ 的标准基为 {1, t, t², t³}，它的维度是多少？'][current.selected] : `请用一句话解释「${s.title}」，并举一个最简单的例子。`;
+    const simple = c ? { kernel: 'Is the zero vector always in the kernel? Explain in one sentence.', derivative: 'If an object has zero velocity, must its position also be zero?', recursion: 'A factorial function returns 1 when n ≤ 1. Is this its base case or recursive step?' }[c.id] : current.id === 'sample-vector-spaces' ? ['How many vectors are in the standard basis {(1, 0), (0, 1)}?', 'If v = 2b₁ + 3b₂, what are the two coordinates of [v]ᵦ?', 'P₃ has standard basis {1, t, t², t³}. What is its dimension?'][current.selected] : `Explain “${s.title}” in one sentence and give one simple example.`;
     return markdown(simple);
   }
-  if (c) return phase === 0 ? markdown(c.question) : phase === 1 ? '<p>试着用自己的话解释一个关键步骤。（选填）</p>' : phase === 2 ? markdown(c.variants[progress().variant].prompt) : `<ol>${c.recallQuestions.map(q => `<li>${e(q)}</li>`).join('')}</ol>`;
-  if (phase === 0) return s.blocks.practice ? markdown(s.blocks.practice) : `<p>用自己的话解释「${e(s.title)}」的核心想法。为什么需要它？</p>`;
-  if (phase === 1) return '<p>这个例子最重要的一步是什么？为什么这样做？（笔记选填）</p>';
-  if (phase === 2) return s.blocks.practice ? markdown(s.blocks.practice) : `<p>先合上资料，为「${e(s.title)}」写一个新的例子或实际应用，并独立完成。记下你的推理与验证过程。</p>`;
-  return `<ol><li>不看资料，用自己的话解释「${e(s.title)}」的核心概念。</li><li>回想一个重要结论或步骤，并说明为什么。</li><li>换一个新情境，你会怎样运用它？</li></ol>`;
+  if (c) return phase === 0 ? markdown(c.question) : phase === 1 ? '<p>Explain one key step in your own words. (Optional)</p>' : phase === 2 ? markdown(c.variants[progress().variant].prompt) : `<ol>${c.recallQuestions.map(q => `<li>${e(q)}</li>`).join('')}</ol>`;
+  if (phase === 0) return s.blocks.practice ? markdown(s.blocks.practice) : `<p>Explain the main idea of “${e(s.title)}” in your own words. Why do we need it?</p>`;
+  if (phase === 1) return '<p>What is the most important step in this example, and why? (Notes are optional.)</p>';
+  if (phase === 2) return s.blocks.practice ? markdown(s.blocks.practice) : `<p>Close your notes. Create and solve a new example or real-world application of “${e(s.title)}”. Write out your reasoning and checks.</p>`;
+  return `<ol><li>Without your notes, explain the core idea of “${e(s.title)}”.</li><li>Recall an important result or step and explain why it works.</li><li>How would you use it in a new situation?</li></ol>`;
 }
 function checksHTML() {
   const checked = checkedIndexes();
@@ -132,22 +132,22 @@ function feedbackHTML() {
   if (phase === 1 && !transient.showCheck && !p.exampleReviewed) return '';
   const f = transient.feedback;
   const showReference = phase === 3 || phase === 2 && p.practicePassed;
-  return `<section class="check-panel" aria-label="自检标准"><div class="block-label"><span>${f?.title ? e(f.title) : phase === 3 ? 'CHECK YOUR RECALL' : 'SELF CHECK'}</span><span>对照自检</span></div>${f ? `<p>${e(f.text)}</p>` : `<p>对照资料，确认自己能独立解释。尚不确定的部分，可以只回到对应阶段。</p>`}${showReference ? `<details class="reference-answer"><summary>展开参考内容</summary><div class="prose">${referenceAnswer()}</div></details>` : ''}${f?.status === 'retry' || f?.status === 'empty' ? '' : checksHTML()}${phase === 2 && progress().hints >= 4 ? '<p class="helper-note">你已看过完整参考。请先隐藏解答、重新独立尝试，再确认完成。</p><button class="secondary-button" data-action="retry">隐藏参考，重新尝试</button>' : ''}</section>`;
+  return `<section class="check-panel" aria-label="Self-check criteria"><div class="block-label"><span>${f?.title ? e(f.title) : phase === 3 ? 'CHECK YOUR RECALL' : 'SELF CHECK'}</span><span>Self-check</span></div>${f ? `<p>${e(f.text)}</p>` : `<p>Check your reasoning against the material. Revisit only the parts that need more work.</p>`}${showReference ? `<details class="reference-answer"><summary>Show reference</summary><div class="prose">${referenceAnswer()}</div></details>` : ''}${f?.status === 'retry' || f?.status === 'empty' ? '' : checksHTML()}${phase === 2 && progress().hints >= 4 ? '<p class="helper-note">You have viewed the full reference. Hide it and try independently before confirming completion.</p><button class="secondary-button" data-action="retry">Hide reference and try again</button>' : ''}</section>`;
 }
 function hintsHTML() {
   const p = progress(), s = section(), c = s.courseId && courses.find(c => c.id === s.courseId);
-  const hints = c ? c.variants[p.variant].hints : ['先回忆这一节的定义：对象是什么，需要满足什么条件？', '把已知条件与目标分别列出来，找一个能把两者连接起来的概念或步骤。', '回看本节示范中最接近的一步，再隐藏资料，尝试解释下一步应该怎样做。'];
-  return p.hints ? `<div class="hints">${hints.slice(0, p.hints).map((hint, i) => `<div class="hint"><span>0${i + 1} / ${['概念', '方法', '下一步'][i]}提示</span><p>${e(hint)}</p></div>`).join('')}${p.hints >= 4 ? `<div class="hint"><span>04 / 参考内容</span><div class="prose">${referenceAnswer()}</div></div>` : ''}<p class="helper-note">使用提示的部分已加入明天复习，不代表整道题失败。</p></div>` : '';
+  const hints = c ? c.variants[p.variant].hints : ['Recall the definition. What are the objects, and which conditions must they satisfy?', 'List what you know and what you need to find. Which idea connects them?', 'Find the closest step in the example, then hide your notes and explain the next step yourself.'];
+  return p.hints ? `<div class="hints">${hints.slice(0, p.hints).map((hint, i) => `<div class="hint"><span>0${i + 1} / ${['Concept', 'Method', 'Next step'][i]}</span><p>${e(hint)}</p></div>`).join('')}${p.hints >= 4 ? `<div class="hint"><span>04 / Reference</span><div class="prose">${referenceAnswer()}</div></div>` : ''}<p class="helper-note">This step is saved for review tomorrow. Using a hint is part of learning.</p></div>` : '';
 }
 function completeHTML() {
-  return `<div class="completion"><span class="completion-circle"></span><p class="eyebrow">ONE SMALL STEP, TRULY YOURS.</p><h1 tabindex="-1">这一节，真正学会了。</h1><p>${e(section().title)} · ${current.mode === 'class' ? '课堂理解、集中练习和回忆已完成' : '四阶段自检已完成'}。<br>已安排第 1、3、7 天的间隔回忆。</p><div class="completion-days"><span>+1<small>天后回想</small></span><span>+3<small>天后巩固</small></span><span>+7<small>天后迁移</small></span></div><button class="primary-button" data-action="next-section">${current.selected < current.sections.length - 1 ? '继续下一个模块' : '回到这一节'} <span>→</span></button></div>`;
+  return `<div class="completion"><span class="completion-circle"></span><p class="eyebrow">ONE SMALL STEP, TRULY YOURS.</p><h1 tabindex="-1">One idea. Made your own.</h1><p>${e(section().title)} · ${current.mode === 'class' ? 'Class learning, practice and recall complete' : 'All four learning steps complete'}.<br>Reviews are scheduled in 1, 3 and 7 days.</p><div class="completion-days"><span>+1<small>day · Recall</small></span><span>+3<small>days · Revisit</small></span><span>+7<small>days · Apply</small></span></div><button class="primary-button" data-action="next-section">${current.selected < current.sections.length - 1 ? 'Next section' : 'Back to this section'} <span>→</span></button></div>`;
 }
 function renderBatch() {
   const target = transient.batchPhase || 2;
-  $('#reading').innerHTML = `<div class="reading-meta"><span>AFTER CLASS / ALL CHAPTERS</span><span>课上自学</span></div><header class="article-heading"><h1 tabindex="-1">课后，把知识连起来。</h1><p>课堂里先理解。现在集中练习，再用闭卷回忆检查掌握。</p></header><div class="batch-tabs"><button data-batch-phase="2" aria-pressed="${target === 2}">独立练习</button><button data-batch-phase="3" aria-pressed="${target === 3}">闭卷回忆</button></div><div class="batch-list">${current.sections.map((s, i) => {
+  $('#reading').innerHTML = `<div class="reading-meta"><span>AFTER CLASS / ALL CHAPTERS</span><span>In class</span></div><header class="article-heading"><h1 tabindex="-1">After class. Put it together.</h1><p>You made room for understanding. Now practise, then see what you can recall.</p></header><div class="batch-tabs"><button data-batch-phase="2" aria-pressed="${target === 2}">Independent practice</button><button data-batch-phase="3" aria-pressed="${target === 3}">Active recall</button></div><div class="batch-list">${current.sections.map((s, i) => {
     const c = s.courseId && courses.find(c => c.id === s.courseId);
-    const question = target === 3 ? `不看资料，解释「${s.title}」的核心概念、为什么成立，以及一个新情境中的应用。` : c ? c.variants[s.progress.variant].prompt : s.blocks.practice || `为「${s.title}」写一个新的例子或实际应用，并独立完成。`;
-    return `<section class="batch-card"><div class="batch-card-heading"><span class="status-circle ${s.progress.completed[target] ? 'is-complete' : ''}"></span><h2>${e(s.title)}</h2></div><div class="prose">${markdown(question)}</div><label class="sr-only" for="batch-answer-${i}">第 ${i + 1} 节的${target === 2 ? '独立练习' : '闭卷回忆'}</label><textarea class="answer-input" id="batch-answer-${i}" data-batch-draft="${i}" maxlength="12000" rows="3" placeholder="${target === 3 ? '先不看资料，写下你能回想起来的……' : '写下你的独立思路……'}">${e(s.progress.drafts[target])}</textarea><button class="secondary-button" data-batch-start="${i}">${s.progress.completed[target] ? '回看这次自检' : '检查与继续'} ↗</button></section>`;
+    const question = target === 3 ? `Without your notes, explain the core idea of “${s.title}”, why it works, and how to use it in a new situation.` : c ? c.variants[s.progress.variant].prompt : s.blocks.practice || `Create and solve a new example or application of “${s.title}” independently.`;
+    return `<section class="batch-card"><div class="batch-card-heading"><span class="status-circle ${s.progress.completed[target] ? 'is-complete' : ''}"></span><h2>${e(s.title)}</h2></div><div class="prose">${markdown(question)}</div><label class="sr-only" for="batch-answer-${i}">Section ${i + 1}: ${target === 2 ? 'Independent practice' : 'Active recall'}</label><textarea class="answer-input" id="batch-answer-${i}" data-batch-draft="${i}" maxlength="12000" rows="3" placeholder="${target === 3 ? 'Start with what you can remember, without your notes…' : 'Write out your own reasoning…'}">${e(s.progress.drafts[target])}</textarea><button class="secondary-button" data-batch-start="${i}">${s.progress.completed[target] ? 'Revisit your check' : 'Check and continue'} ↗</button></section>`;
   }).join('')}</div>`;
 }
 function renderReading(focus = false) {
@@ -156,16 +156,16 @@ function renderReading(focus = false) {
   if (transient.batch) { renderBatch(); return; }
   if (transient.complete) { $('#reading').innerHTML = completeHTML(); return; }
   const fullTitle = s.title.replace(/^\d+(?:\.\d+)*\s*[—–-]?\s*/, '');
-  const headingQuestion = s.blocks.question || (phase === 0 ? '一次弄懂一个小知识点，把理解变成自己的能力。' : phases[phase].description);
+  const headingQuestion = s.blocks.question || (phase === 0 ? 'One small idea at a time. Turn understanding into something you can use.' : phases[phase].description);
   $('#reading').innerHTML = `
-    ${transient.fromBatch ? '<button class="text-button batch-back" data-action="batch">← 返回集中练习</button>' : ''}<div class="reading-meta"><span>${e(s.page ? `${source} / PAGE ${String(s.page).padStart(2, '0')}` : `${source} / SECTION ${String(current.selected + 1).padStart(2, '0')}`)}</span>${pdfURL ? `<a href="${pdfURL}#page=${s.page || 1}" target="_blank" rel="noopener">查看原文件 ↗</a>` : '<span class="saved-indicator">本机保存</span>'}</div>
-    <header class="article-heading"><h1 tabindex="-1">${e(fullTitle)}</h1><p>${phase === 0 && s.blocks.question ? '核心问题：' : ''}${e(headingQuestion)}</p></header>
-    ${phase < 2 ? `<section class="source-section"><div class="block-label"><span>${phase === 0 ? 'THE KEY IDEA' : 'WORKED EXAMPLE'}</span><span>${phases[phase].title}</span></div>${current.scanned ? `<p class="source-note">这份 PDF 没有可提取的文字，先按原稿页码阅读。</p><iframe class="pdf-source" title="资料原页" src="${pdfURL}#page=${s.page || 1}&view=FitH"></iframe>` : `<div class="prose">${bodyForPhase()}</div>`}</section>` : ''}
-    ${phase === 3 ? `<p class="recall-note">先合上资料，从记忆中写下来。完成后再核对。</p>` : ''}
-    <section class="question-section"><div class="block-label"><span>${[current.mode === 'class' ? 'ONE SIMPLE CHECK' : 'QUICK CHECK / 01', 'YOUR UNDERSTANDING', 'TRY IT YOURSELF', reviewId ? 'SPACED RECALL' : 'ACTIVE RECALL'][phase]}</span><span>${['Understanding', 'Worked Examples', 'Independent Practice', 'Active Recall'][phase]}</span></div><div class="prose question-text">${questionForPhase()}</div><label class="sr-only" for="study-answer">${phases[phase].title}的回答</label><textarea id="study-answer" class="answer-input" maxlength="12000" rows="4" placeholder="${phase === 3 ? '合上资料，写下你记得的概念、理由与应用……' : '写下你的判断和理由……'}">${e(currentDraft())}</textarea><div class="answer-toolbar">${phase === 2 ? `<button class="text-button" data-action="hint" ${p.hints >= 4 ? 'disabled' : ''}>${p.hints === 0 ? '需要一点提示？' : p.hints === 3 ? '查看完整参考' : '再提示一点'}${p.hints ? ` (${p.hints}/4)` : ''}</button>` : '<span class="answer-note">用自己的话表达，不用追求完美。</span>'}<button class="secondary-button" data-action="check">${phase === 1 ? '我能解释关键步骤' : phase === 3 ? '写好了，对照自检' : '检查我的思路'} <span>↗</span></button></div>${phase === 2 ? hintsHTML() : ''}${feedbackHTML()}</section>
-    <div class="learning-controls"><div class="pace-control"><span>学习节奏</span>${[['slow', '慢一点'], ['normal', '合适'], ['fast', '快一点']].map(([value, label]) => `<button data-pace="${value}" aria-pressed="${p.pace === value}">${label}</button>`).join('')}</div><button class="text-button" data-action="defer">这节先放一放 ↗</button></div>
-    ${p.pace === 'slow' ? '<p class="pace-note">一次只处理一个问题。可以先写下已确定的部分，再找出最不清楚的一步。无需重学已经掌握的内容。</p>' : ''}
-    <footer class="reading-footer"><span>${phase === 3 ? '独立练习与回忆自检完成后，模块圆点才会填满。' : '理解与自检确认后，再进入下一步。'}</span><button class="primary-button" data-action="continue" ${!canContinue() ? 'disabled' : ''}>${phase === 3 ? reviewId ? '完成这次复习' : '确认这次回忆' : current.mode === 'class' && phase === 0 ? '理解了 · 继续跟课' : current.mode === 'class' && phase === 2 ? '确认练习 · 返回集中练习' : ['继续 · 完整例题', '继续 · 独立练习', '继续 · 闭卷回忆'][phase]} <span>→</span></button></footer>`;
+    ${transient.fromBatch ? '<button class="text-button batch-back" data-action="batch">← Back to after-class practice</button>' : ''}<div class="reading-meta"><span>${e(s.page ? `${source} / PAGE ${String(s.page).padStart(2, '0')}` : `${source} / SECTION ${String(current.selected + 1).padStart(2, '0')}`)}</span>${pdfURL ? `<a href="${pdfURL}#page=${s.page || 1}" target="_blank" rel="noopener">Open original ↗</a>` : '<span class="saved-indicator">Saved locally</span>'}</div>
+    <header class="article-heading"><h1 tabindex="-1">${e(fullTitle)}</h1><p>${phase === 0 && s.blocks.question ? 'Core question: ' : ''}${e(headingQuestion)}</p></header>
+    ${phase < 2 ? `<section class="source-section"><div class="block-label"><span>${phase === 0 ? 'THE KEY IDEA' : 'WORKED EXAMPLE'}</span><span>${phases[phase].title}</span></div>${current.scanned ? `<p class="source-note">This PDF has no extractable text. Read the original pages below.</p><iframe class="pdf-source" title="Original document page" src="${pdfURL}#page=${s.page || 1}&view=FitH"></iframe>` : `<div class="prose">${bodyForPhase()}</div>`}</section>` : ''}
+    ${phase === 3 ? `<p class="recall-note">Close your notes. Write from memory first, then check.</p>` : ''}
+    <section class="question-section"><div class="block-label"><span>${[current.mode === 'class' ? 'ONE SIMPLE CHECK' : 'QUICK CHECK / 01', 'YOUR UNDERSTANDING', 'TRY IT YOURSELF', reviewId ? 'SPACED RECALL' : 'ACTIVE RECALL'][phase]}</span><span>${['Understanding', 'Worked Examples', 'Independent Practice', 'Active Recall'][phase]}</span></div><div class="prose question-text">${questionForPhase()}</div><label class="sr-only" for="study-answer">Your ${phases[phase].title} response</label><textarea id="study-answer" class="answer-input" maxlength="12000" rows="4" placeholder="${phase === 3 ? 'Close your notes. Recall the ideas, reasoning and applications…' : 'What do you think, and why?'}">${e(currentDraft())}</textarea><div class="answer-toolbar">${phase === 2 ? `<button class="text-button" data-action="hint" ${p.hints >= 4 ? 'disabled' : ''}>${p.hints === 0 ? 'Need a hint?' : p.hints === 3 ? 'Show full reference' : 'One more hint'}${p.hints ? ` (${p.hints}/4)` : ''}</button>` : '<span class="answer-note">Your own words are enough.</span>'}<button class="secondary-button" data-action="check">${phase === 1 ? 'I can explain the steps' : phase === 3 ? 'Ready to self-check' : 'Check my thinking'} <span>↗</span></button></div>${phase === 2 ? hintsHTML() : ''}${feedbackHTML()}</section>
+    <div class="learning-controls"><div class="pace-control"><span>Pace</span>${[['slow', 'Slower'], ['normal', 'Just right'], ['fast', 'Faster']].map(([value, label]) => `<button data-pace="${value}" aria-pressed="${p.pace === value}">${label}</button>`).join('')}</div><button class="text-button" data-action="defer">Save this for later ↗</button></div>
+    ${p.pace === 'slow' ? '<p class="pace-note">One question at a time. Start with what you know, then find the smallest step that feels unclear.</p>' : ''}
+    <footer class="reading-footer"><span>${phase === 3 ? 'A solid circle means you have completed the required learning steps.' : 'Move on when you can explain it in your own words.'}</span><button class="primary-button" data-action="continue" ${!canContinue() ? 'disabled' : ''}>${phase === 3 ? reviewId ? 'Finish this review' : 'Confirm my recall' : current.mode === 'class' && phase === 0 ? 'Got it · Keep learning' : current.mode === 'class' && phase === 2 ? 'Confirm · Back to practice' : ['Next · Worked example', 'Next · Independent practice', 'Next · Active recall'][phase]} <span>→</span></button></footer>`;
   if (focus) { window.scrollTo({ top: 0 }); $('h1', $('#reading'))?.focus({ preventScroll: true }); }
 }
 function render() { renderSidebar(); renderReading(); $('#document-name').textContent = current?.filename || ''; tickTimer(); }
@@ -182,6 +182,15 @@ function openSection(index) {
   save(); render(); window.scrollTo({ top: 0 });
 }
 function openMaterial(material) {
+  if (material.id === 'builtin-courses') {
+    material.title = 'Three small ideas';
+    material.filename = 'Built-in lessons';
+    material.description = 'Explore kernels, derivatives and recursion. Your previous progress is preserved.';
+    for (const item of material.sections) {
+      const course = courses.find(c => c.id === item.courseId);
+      if (course) { item.title = course.title; item.body = course.concise; item.blocks = { question: course.description }; }
+    }
+  }
   current = material; current.reviews ||= [];
   if (pdfURL) URL.revokeObjectURL(pdfURL);
   pdfURL = current.fileBlob ? URL.createObjectURL(current.fileBlob) : null;
@@ -202,10 +211,11 @@ function home() {
 }
 function renderLibrary() {
   const visible = [...materials].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
-  $('#saved-materials').innerHTML = visible.length ? `<p class="eyebrow library-label">YOUR MATERIALS</p>${visible.map(m => `<button class="material-link" data-material="${e(m.id)}"><span class="material-initial">${m.kind === 'pdf' ? 'PDF' : m.id === 'builtin-courses' ? 'ABC' : 'TXT'}</span><span><strong>${e(m.title)}</strong><small>${m.sections.length} 个模块 · ${m.sections.filter(s => isDone(s.progress, m.mode)).length} 个完成</small></span><span aria-hidden="true">↗</span></button>`).join('')}` : '';
+  $('#saved-materials').innerHTML = visible.length ? `<p class="eyebrow library-label">Continue learning</p>${visible.map(m => `<button class="material-link" data-material="${e(m.id)}"><span class="material-initial">${m.kind === 'pdf' ? 'PDF' : m.id === 'builtin-courses' ? 'ABC' : /\.m(?:d|arkdown)$/i.test(m.filename) || m.kind === 'sample' ? 'MD' : 'TXT'}</span><span><strong>${e(m.id === 'builtin-courses' ? 'Three small ideas' : m.title)}</strong><small>${m.sections.length} sections · ${m.sections.filter(s => isDone(s.progress, m.mode)).length} complete</small></span><span aria-hidden="true">↗</span></button>`).join('')}` : '';
 }
 function showLibrary() {
   renderLibrary();
+  $('#upload-error').hidden = true;
   document.querySelectorAll('[name="import-mode"]').forEach(input => { input.checked = input.value === importMode; });
   $('#library-dialog').showModal();
 }
@@ -217,12 +227,12 @@ async function importFile(file) {
   if (busy || !file) return;
   busy = true; $('#pick-file').disabled = true; $('#upload-error').hidden = true;
   if (!$('#library-dialog').open) showLibrary();
-  $('#upload-status').hidden = false; $('#upload-status-text').textContent = '正在读取资料…';
+  $('#upload-status').hidden = false; $('#upload-status-text').textContent = 'Reading your material…';
   try {
     validateFile(file);
     const bytes = await file.arrayBuffer(), id = await fileId(bytes);
     const previous = materials.find(m => m.id === id);
-    if (previous) { openMaterial(previous); toast('已打开这份资料，上次的进度已保留。'); return; }
+    if (previous) { openMaterial(previous); toast('Welcome back. Your previous progress is here.'); return; }
     let parsed;
     const pdf = /\.pdf$/i.test(file.name);
     if (pdf) parsed = await parsePdfMaterial(bytes, file.name, text => { $('#upload-status-text').textContent = text; });
@@ -233,20 +243,24 @@ async function importFile(file) {
     }
     const material = createMaterial(parsed, file.name, id, { kind: pdf ? 'pdf' : 'text', mode: importMode, scanned: !!parsed.scanned, ...(pdf ? { fileBlob: new Blob([bytes], { type: 'application/pdf' }) } : {}) });
     materials.push(material); current = material; save(); await writes;
-    openMaterial(material); announce(`已导入 ${file.name}，生成 ${material.sections.length} 个目录项`);
+    openMaterial(material); announce(`Imported ${file.name} with ${material.sections.length} sections.`);
   } catch (error) {
-    $('#upload-error').textContent = error.message || '资料读取失败，请换一份文件重试。'; $('#upload-error').hidden = false;
+    $('#upload-error').textContent = error.message || 'This file could not be read. Please try another copy.'; $('#upload-error').hidden = false;
   } finally { busy = false; $('#pick-file').disabled = false; $('#upload-status').hidden = true; $('#file-input').value = ''; }
 }
 async function openSample() {
   const existing = materials.find(m => m.id === 'sample-vector-spaces');
-  if (existing) { openMaterial(existing); return; }
+  if (existing?.contentLocale === 'en') { openMaterial(existing); return; }
   try {
     const response = await fetch('/assets/sample-material.md');
-    if (!response.ok) throw new Error('示例资料暂时无法读取。');
+    if (!response.ok) throw new Error('The sample could not be opened. Please try again.');
     const parsed = parseTextMaterial(await response.text(), 'Vector Spaces.md');
-    const material = createMaterial(parsed, 'Vector Spaces · 示例资料', 'sample-vector-spaces', { kind: 'sample', mode: importMode });
-    materials.push(material); current = material; save(); openMaterial(material);
+    const material = existing ? {
+      ...existing, title: parsed.title, description: parsed.description, filename: 'Vector Spaces · Sample', contentLocale: 'en',
+      sections: parsed.sections.map(s => ({ ...s, progress: existing.sections.find(old => old.id === s.id)?.progress || s.progress }))
+    } : createMaterial(parsed, 'Vector Spaces · Sample', 'sample-vector-spaces', { kind: 'sample', mode: importMode, contentLocale: 'en' });
+    if (existing) materials[materials.indexOf(existing)] = material; else materials.push(material);
+    current = material; save(); openMaterial(material);
   } catch (error) { toast(error.message); }
 }
 function openBuiltin() {
@@ -254,7 +268,7 @@ function openBuiltin() {
   if (!existing) {
     let legacy;
     try { legacy = restoreState(localStorage.getItem(STORAGE_KEY)); } catch { legacy = restoreState(); }
-    existing = createMaterial({ title: '三个小知识点', description: '线性变换的核、导数的直觉与递归。原有学习记录会继续保留。', sections: courses.map(c => ({ id: c.id, title: c.title, courseId: c.id, body: c.concise, blocks: { question: c.description }, progress: legacy.modules[c.id] || newProgress() })) }, '内置练习', 'builtin-courses', { kind: 'builtin', mode: importMode });
+    existing = createMaterial({ title: 'Three small ideas', description: 'Explore kernels, derivatives and recursion. Your previous progress is preserved.', sections: courses.map(c => ({ id: c.id, title: c.title, courseId: c.id, body: c.concise, blocks: { question: c.description }, progress: legacy.modules[c.id] || newProgress() })) }, 'Built-in lessons', 'builtin-courses', { kind: 'builtin', mode: importMode });
     existing.reviews = legacy.reviews.map(r => ({ ...r, sectionId: r.moduleId }));
     materials.push(existing); current = existing; save();
   }
@@ -265,13 +279,13 @@ function continueLearning() {
   if (!canContinue()) return;
   if (reviewId) {
     const review = current.reviews.find(r => r.id === reviewId); if (review) review.done = true;
-    reviewId = null; resetTransient(); save(); pauseTimer(); render(); toast('这一次回忆已完成，记录已保存。'); return;
+    reviewId = null; resetTransient(); save(); pauseTimer(); render(); toast('Review complete. Your progress is saved.'); return;
   }
   const wasDone = isDone(p);
   if (!completePhase(p, phase, { unordered: true, understandingMinLength: current.mode === 'class' ? 1 : 8 })) return;
   if (isDone(p) && !wasDone) {
     if (!wasDone) materialReview(current, section().id);
-    transient.complete = true; pauseTimer(); save(); render(); celebrate(); announce('模块已完成，目录圆点已填为主题色。');
+    transient.complete = true; pauseTimer(); save(); render(); celebrate(); announce('Section complete. Its progress circle is now filled.');
   } else if (current.mode === 'class') {
     save();
     if (phase === 0 && current.selected < current.sections.length - 1) { openSection(current.selected + 1); phase = 0; current.phase = 0; save(); render(); }
@@ -280,9 +294,9 @@ function continueLearning() {
 }
 function tickTimer() {
   const seconds = timerSeconds(timer);
-  if (timer.running && seconds === 0) { timer.running = false; timer.remaining = 0; timer.endsAt = null; saveTimer(); toast('专注时间到了。休息一下，再检查今天留下了什么。'); }
+  if (timer.running && seconds === 0) { timer.running = false; timer.remaining = 0; timer.endsAt = null; saveTimer(); toast('Your focus session is complete. Take a break and notice what stayed with you.'); }
   if ($('#timer-value')) $('#timer-value').textContent = formatTime(seconds);
-  if ($('#timer-toggle')) { $('#timer-toggle').innerHTML = timer.running ? icons.pause : icons.play; $('#timer-toggle').setAttribute('aria-label', timer.running ? '暂停专注计时' : '开始专注计时'); }
+  if ($('#timer-toggle')) { $('#timer-toggle').innerHTML = timer.running ? icons.pause : icons.play; $('#timer-toggle').setAttribute('aria-label', timer.running ? 'Pause focus timer' : 'Start focus timer'); }
 }
 function toggleTimer() {
   if (timer.running) { timer.remaining = timerSeconds(timer); timer.running = false; timer.endsAt = null; }
@@ -290,9 +304,10 @@ function toggleTimer() {
   saveTimer(); tickTimer();
 }
 function pauseTimer() { if (timer.running) toggleTimer(); }
+function reviewReason(reason) { return ({ '间隔回忆': 'Spaced recall', '巩固回忆': 'Spaced recall', '提示后巩固': 'Hint follow-up', '稍后再学': 'Saved for later' })[reason] || reason; }
 function showReviews() {
   const items = current.reviews.filter(r => !r.done).sort((a, b) => a.due.localeCompare(b.due));
-  $('#reviews-list').innerHTML = items.length ? items.map(r => `<button class="review-row" data-review="${e(r.id)}"><span>${e(r.due.slice(5).replace('-', ' / '))}</span><span><strong>${e(current.sections.find(s => s.id === r.sectionId)?.title || '')}</strong><small>${e(r.reason)} · ${r.due <= localDate() ? '可以开始了' : '也可以提前回忆'}</small></span><span>↗</span></button>`).join('') : '<p class="empty-note">完成一个模块后，这里会安排第 1、3、7 天的回忆。使用过提示的部分，也会单独加入复习。</p>';
+  $('#reviews-list').innerHTML = items.length ? items.map(r => `<button class="review-row" data-review="${e(r.id)}"><span>${e(r.due.slice(5).replace('-', ' / '))}</span><span><strong>${e(current.sections.find(s => s.id === r.sectionId)?.title || '')}</strong><small>${e(reviewReason(r.reason))} · ${r.due <= localDate() ? 'Ready to revisit' : 'Revisit early if you like'}</small></span><span>↗</span></button>`).join('') : '<p class="empty-note">Complete a section to schedule reviews in 1, 3 and 7 days. Steps that needed a hint get their own review.</p>';
   $('#reviews-dialog').showModal();
 }
 
@@ -323,7 +338,7 @@ $('#reading').addEventListener('change', event => {
   if (phase === 2) p.practicePassed = all && p.hints < 4;
   if (phase === 3) { if (reviewId) transient.reviewChecked = all; else p.recallReviewed = all; }
   if (phase === 2 && p.practicePassed && !$('.reference-answer')) {
-    $('.check-panel').insertAdjacentHTML('beforeend', `<details class="reference-answer"><summary>核对标准思路</summary><div class="prose">${referenceAnswer()}</div></details>`);
+    $('.check-panel').insertAdjacentHTML('beforeend', `<details class="reference-answer"><summary>Compare with the worked solution</summary><div class="prose">${referenceAnswer()}</div></details>`);
   }
   $('[data-action="continue"]').disabled = !canContinue(); save();
 });
@@ -334,25 +349,25 @@ $('#workspace').addEventListener('click', event => {
   const chapter = event.target.closest('[data-section]'), stage = event.target.closest('[data-phase]'), action = event.target.closest('[data-action]'), pace = event.target.closest('[data-pace]');
   if (chapter) { openSection(Number(chapter.dataset.section)); return; }
   if (stage) { goPhase(Number(stage.dataset.phase)); return; }
-  if (pace) { progress().pace = pace.dataset.pace; save(); renderReading(); toast(progress().pace === 'slow' ? '放慢一点，只处理当前这个问题。' : progress().pace === 'fast' ? '精简引导，按熟悉的节奏前进。' : '保持合适的节奏。'); return; }
+  if (pace) { progress().pace = pace.dataset.pace; save(); renderReading(); toast(progress().pace === 'slow' ? 'A little slower. One question at a time.' : progress().pace === 'fast' ? 'Less guidance. Keep moving at a pace that suits you.' : 'Stay with the pace that feels right.'); return; }
   if (event.target.closest('#timer-toggle')) { toggleTimer(); return; }
   if (!action) return;
   const p = progress();
   switch (action.dataset.action) {
     case 'check':
-      if (phase !== 1 && currentDraft().trim().length < (phase === 3 ? 16 : phase === 0 && current.mode === 'class' ? 1 : 8)) { toast(phase === 3 ? '先闭卷写下你的回忆，至少 16 个字，再核对。' : current.mode === 'class' && phase === 0 ? '先写下这道简单题的回答。' : '先写一点自己的尝试，至少 8 个字，再来检查。'); $('#study-answer').focus(); return; }
+      if (phase !== 1 && currentDraft().trim().length < (phase === 3 ? 16 : phase === 0 && current.mode === 'class' ? 1 : 8)) { toast(phase === 3 ? 'Write a short recall response first (at least 16 characters), then check.' : current.mode === 'class' && phase === 0 ? 'Write your answer to the quick check first.' : 'Start with your own attempt (at least 8 characters), then check.'); $('#study-answer').focus(); return; }
       transient.showCheck = true; transient.checks = [];
       if (phase === 2 && section().courseId) transient.feedback = evaluatePractice(section().courseId, p.variant, currentDraft());
       renderReading(); $('.check-panel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
     case 'continue': continueLearning(); break;
     case 'hint':
       if (p.hints >= 4) return;
-      p.hints++; p.practicePassed = false; transient.checks = []; materialReview(current, section().id, [1], '提示后巩固'); save(); renderReading(); $('.hints')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
+      p.hints++; p.practicePassed = false; transient.checks = []; materialReview(current, section().id, [1], 'Hint follow-up'); save(); renderReading(); $('.hints')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
     case 'retry':
       p.hints = 0; p.drafts[2] = ''; p.practicePassed = false;
       if (section().courseId) p.variant = p.variant === 0 ? 1 : 0;
       resetTransient(); save(); renderReading(); $('#study-answer').focus(); break;
-    case 'defer': materialReview(current, section().id, [1], '稍后再学'); pauseTimer(); save(); renderSidebar(); toast('已留到明天。其他进度保留，不必从头开始。'); break;
+    case 'defer': materialReview(current, section().id, [1], 'Saved for later'); pauseTimer(); save(); renderSidebar(); toast('Saved for tomorrow. Everything else stays right where you left it.'); break;
     case 'rest': pauseTimer(); save(); $('#rest-dialog').showModal(); break;
     case 'reset-timer': timer = { remaining: 3600, running: false, endsAt: null }; saveTimer(); tickTimer(); break;
     case 'reviews': showReviews(); break;
@@ -361,9 +376,10 @@ $('#workspace').addEventListener('click', event => {
     case 'next-section': if (current.mode === 'class') { transient = { batch: true, batchPhase: 3 }; render(); break; } openSection(current.selected < current.sections.length - 1 ? current.selected + 1 : current.selected); break;
   }
 });
-$('#mode-switch').addEventListener('change', event => { current.mode = event.target.value; importMode = current.mode; if (current.mode === 'class' && phase === 1) phase = 0; resetTransient(); save(); render(); toast(current.mode === 'class' ? '课上自学：概念配一道简单题，练习与复习放到课后集中做。' : '自学：保留四阶段学习，目录与阶段都可以自由选择。'); });
+$('#mode-switch').addEventListener('change', event => { current.mode = event.target.value; importMode = current.mode; if (current.mode === 'class' && phase === 1) phase = 0; resetTransient(); save(); render(); toast(current.mode === 'class' ? 'Learn along: one quick check now, practice and recall after class.' : 'Self-study: four learning steps, with the freedom to choose where you start.'); });
 document.querySelectorAll('[name="import-mode"]').forEach(input => input.addEventListener('change', () => { importMode = input.value; }));
 $('#open-studio').addEventListener('click', showLibrary);
+$('#start-button').addEventListener('click', showLibrary);
 $('#back-home').addEventListener('click', home);
 $('#open-library').addEventListener('click', showLibrary);
 $('#pick-file').addEventListener('click', () => $('#file-input').click());
@@ -373,7 +389,12 @@ $('#upload-icon').innerHTML = icons.upload;
 $('#file-input').addEventListener('change', event => importFile(event.target.files[0]));
 $('#open-sample').addEventListener('click', openSample);
 $('#open-builtin').addEventListener('click', openBuiltin);
-$('#saved-materials').addEventListener('click', event => { const button = event.target.closest('[data-material]'); if (button) openMaterial(materials.find(m => m.id === button.dataset.material)); });
+$('#saved-materials').addEventListener('click', event => {
+  const button = event.target.closest('[data-material]');
+  if (!button) return;
+  if (button.dataset.material === 'sample-vector-spaces') openSample();
+  else openMaterial(materials.find(m => m.id === button.dataset.material));
+});
 $('#toc-toggle').addEventListener('click', toggleSidebar);
 $('#sidebar-backdrop').addEventListener('click', toggleSidebar);
 $('#resume-learning').addEventListener('click', () => $('#rest-dialog').close());
@@ -395,7 +416,7 @@ let dragDepth = 0;
 document.addEventListener('dragenter', event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); dragDepth++; $('#drop-overlay').hidden = false; } });
 document.addEventListener('dragover', event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } });
 document.addEventListener('dragleave', event => { if (event.dataTransfer?.types.includes('Files')) { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('#drop-overlay').hidden = true; } });
-document.addEventListener('drop', event => { event.preventDefault(); dragDepth = 0; $('#drop-overlay').hidden = true; if (event.dataTransfer.files.length > 1) toast('一次先专注一份资料，已读取第一个文件。'); importFile(event.dataTransfer.files[0]); });
+document.addEventListener('drop', event => { event.preventDefault(); dragDepth = 0; $('#drop-overlay').hidden = true; if (event.dataTransfer.files.length > 1) toast('One file at a time. Opening the first file you dropped.'); importFile(event.dataTransfer.files[0]); });
 document.addEventListener('keydown', event => {
   if (matchMedia('(max-width:760px)').matches && sidebarOpen && !$('#workspace').hidden) {
     if (event.key === 'Escape') { sidebarOpen = false; updateSidebar(); $('#toc-toggle').focus(); }
@@ -413,6 +434,6 @@ setInterval(tickTimer, 1000);
 async function init() {
   try { materials = (await listMaterials()).filter(m => m && Array.isArray(m.sections) && m.sections.length); }
   catch { storageFailure(); }
-  try { const id = sessionStorage.getItem('study-studio-current'); const old = materials.find(m => m.id === id); if (old) openMaterial(old); } catch { /* Home still works. */ }
+  try { const id = sessionStorage.getItem('study-studio-current'); const old = materials.find(m => m.id === id); if (old?.id === 'sample-vector-spaces') await openSample(); else if (old) openMaterial(old); } catch { /* Home still works. */ }
 }
 init();

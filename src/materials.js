@@ -5,9 +5,9 @@ export const MAX_TEXT_LENGTH = 2_000_000;
 export function requiredPhases(mode = 'self') { return mode === 'class' ? [0, 2, 3] : [0, 1, 2, 3]; }
 export function sectionComplete(progress, mode = 'self') { return requiredPhases(mode).every(i => progress.completed[i]); }
 export function validateFile(file) {
-  if (!file || !file.size) throw new Error('这份文件是空的，请选择有内容的资料。');
-  if (file.size > MAX_FILE_BYTES) throw new Error('文件超过 25 MB，请拆分成较小的章节后再导入。');
-  if (!/\.(pdf|md|markdown|txt)$/i.test(file.name)) throw new Error('目前支持 PDF、Markdown 和 TXT。请把这份资料导出为其中一种格式。');
+  if (!file || !file.size) throw new Error('This file is empty. Choose a file with some content.');
+  if (file.size > MAX_FILE_BYTES) throw new Error('This file is over 25 MB. Split it into smaller sections before importing.');
+  if (!/\.(pdf|md|markdown|txt)$/i.test(file.name)) throw new Error('Please choose a PDF, Markdown or TXT file.');
 }
 
 function headingAt(lines, i, fenced) {
@@ -39,9 +39,9 @@ export function splitStudyBlocks(content) {
   if (match) parts.key = parts.key.replace(match[0], '').trim();
   return parts;
 }
-export function parseTextMaterial(text, filename = '学习资料.md') {
-  if (typeof text !== 'string' || !text.trim()) throw new Error('资料中没有可读取的文字。');
-  if (text.length > MAX_TEXT_LENGTH) throw new Error('文字内容过长，请按章节拆分后导入。');
+export function parseTextMaterial(text, filename = 'Learning material.md') {
+  if (typeof text !== 'string' || !text.trim()) throw new Error('This material does not contain readable text.');
+  if (text.length > MAX_TEXT_LENGTH) throw new Error('This text is too long. Split it into chapters before importing.');
   const lines = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
   const headings = [];
   let fenced = false;
@@ -59,10 +59,10 @@ export function parseTextMaterial(text, filename = '学习资料.md') {
   const toc = headings.filter(h => h.level === minimum);
   const introEnd = toc[0]?.line ?? lines.length;
   const intro = lines.slice(start, introEnd).join('\n').trim();
-  const description = intro.split('\n').find(l => l.trim() && !l.startsWith('#'))?.replace(/[*`]/g, '').slice(0, 160) || '从理解到独立运用，一次专注一个小知识点。';
+  const description = intro.split('\n').find(l => l.trim() && !l.startsWith('#'))?.replace(/[*`]/g, '').slice(0, 160) || 'From understanding to independent use, one small idea at a time.';
   let sections = [];
   if (toc.length) {
-    if (intro && (start === 0 || intro.split('\n').length > 3)) sections.push({ title: '资料导读', body: intro });
+    if (intro && (start === 0 || intro.split('\n').length > 3)) sections.push({ title: 'Overview', body: intro });
     sections.push(...toc.map((h, i) => ({ title: plainTitle(h.title), body: lines.slice(h.line + 1 + h.skip, toc[i + 1]?.line ?? lines.length).join('\n').trim() })));
   } else {
     const body = lines.slice(start).join('\n').trim();
@@ -70,10 +70,10 @@ export function parseTextMaterial(text, filename = '学习资料.md') {
     if (body.length > 18000) {
       let chunk = '';
       for (const paragraph of body.split(/\n\s*\n/)) {
-        if (chunk.length > 12000) { sections.push({ title: `内容分段 ${sections.length + 1}`, body: chunk }); chunk = ''; }
+        if (chunk.length > 12000) { sections.push({ title: `Part ${sections.length + 1}`, body: chunk }); chunk = ''; }
         chunk += paragraph + '\n\n';
       }
-      if (chunk.trim()) sections.push({ title: `内容分段 ${sections.length + 1}`, body: chunk.trim() });
+      if (chunk.trim()) sections.push({ title: `Part ${sections.length + 1}`, body: chunk.trim() });
     } else sections = [{ title: toc[0]?.title || title, body }];
   }
   return { title, description, sections: sections.map((s, i) => ({ id: `section-${i}`, ...s, blocks: splitStudyBlocks(s.body), progress: newProgress() })) };
@@ -81,7 +81,7 @@ export function parseTextMaterial(text, filename = '学习资料.md') {
 export function createMaterial(parsed, filename, id, extra = {}) {
   return { id, title: parsed.title, description: parsed.description, filename, importedAt: new Date().toISOString(), selected: 0, phase: 0, reviews: [], ...extra, sections: parsed.sections };
 }
-export function materialReview(material, sectionId, offsets = [1, 3, 7], reason = '间隔回忆', now = new Date()) {
+export function materialReview(material, sectionId, offsets = [1, 3, 7], reason = 'Spaced recall', now = new Date()) {
   for (const offset of offsets) {
     const date = new Date(now); date.setDate(date.getDate() + offset);
     const due = localDate(date);
@@ -96,10 +96,10 @@ export async function parsePdfMaterial(bytes, filename, onProgress = () => {}) {
   let pdf;
   try {
     pdf = await task.promise;
-    if (pdf.numPages > 300) throw new Error('PDF 超过 300 页，请按章节拆分后导入。');
+    if (pdf.numPages > 300) throw new Error('This PDF has more than 300 pages. Split it into chapters first.');
     const pages = [];
     for (let n = 1; n <= pdf.numPages; n++) {
-      onProgress(`正在读取 PDF · ${n} / ${pdf.numPages} 页`);
+      onProgress(`Reading PDF · Page ${n} of ${pdf.numPages}`);
       const page = await pdf.getPage(n);
       const content = await page.getTextContent();
       const rows = [];
@@ -134,21 +134,21 @@ export async function parsePdfMaterial(bytes, filename, onProgress = () => {}) {
     const title = filename.replace(/\.pdf$/i, '');
     let sections;
     if (usableOutline) {
-      if (destinations[0].page > 1) destinations.unshift({ title: '资料导读', page: 1 });
+      if (destinations[0].page > 1) destinations.unshift({ title: 'Overview', page: 1 });
       sections = destinations.map((d, i) => ({ title: d.title, page: d.page, body: pages.slice(d.page - 1, (destinations[i + 1]?.page ?? pdf.numPages + 1) - 1).map(p => p.text).join('\n\n') }));
     } else {
       sections = pages.map(page => {
         const sizes = page.rows.map(row => row.size).filter(Boolean).sort((a, b) => a - b);
         const normal = sizes[Math.floor(sizes.length / 2)] || 12;
         const heading = page.rows.find(row => row.text.length < 110 && row.size >= normal * 1.2);
-        return { title: heading?.text || `第 ${page.number} 页`, page: page.number, body: page.text };
+        return { title: heading?.text || `Page ${page.number}`, page: page.number, body: page.text };
       });
     }
-    if (textLength > MAX_TEXT_LENGTH) throw new Error('PDF 文字内容过长，请拆分后导入。');
-    return { title, description: usableOutline ? '按原稿书签整理的学习目录。' : '按原稿页码整理的学习目录。', scanned: textLength < 20, sections: sections.map((s, i) => ({ ...s, id: `section-${i}`, blocks: splitStudyBlocks(s.body), progress: newProgress() })) };
+    if (textLength > MAX_TEXT_LENGTH) throw new Error('This PDF contains too much text. Split it into smaller files first.');
+    return { title, description: usableOutline ? 'Your learning path, organised by the original PDF bookmarks.' : 'Your learning path, organised by the original PDF pages.', scanned: textLength < 20, sections: sections.map((s, i) => ({ ...s, id: `section-${i}`, blocks: splitStudyBlocks(s.body), progress: newProgress() })) };
   } catch (error) {
-    if (error.name === 'PasswordException') throw new Error('这份 PDF 有密码保护，请先导出一份可直接打开的副本。');
-    if (error.name === 'InvalidPDFException') throw new Error('这份 PDF 无法读取，请确认文件完整后重试。');
+    if (error.name === 'PasswordException') throw new Error('This PDF is password-protected. Please export an unlocked copy first.');
+    if (error.name === 'InvalidPDFException') throw new Error('This PDF could not be read. Check that the file is complete and try again.');
     throw error;
   } finally { await task.destroy(); }
 }

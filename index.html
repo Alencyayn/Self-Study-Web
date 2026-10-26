@@ -1,53 +1,60 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#304b3d">
-  <meta name="description" content="study studio — 从自己的资料开始，按自己的节奏理解、练习与回忆。">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="description" content="study studio — Your material. Your pace. A little more understanding, one small idea at a time.">
   <title>study studio</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%23304b3d'/%3E%3Ctext x='8' y='28' font-family='Arial' font-size='27' font-weight='700' fill='%23fafbf8'%3Es%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230284c7'/%3E%3Ctext x='8' y='28' font-family='Arial' font-size='27' font-weight='700' fill='white'%3Es%3C/text%3E%3C/svg%3E">
+  <link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/assets/katex/katex.min.css">
   <link rel="stylesheet" href="/src/styles.css">
   <script type="module" src="/src/app.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#reading">跳到学习内容</a>
+  <a class="skip-link" href="#reading">Skip to learning content</a>
   <main id="home" class="landing">
-    <h1><button id="open-studio" title="点击上传学习资料，也可以将文件拖入页面" aria-label="study studio，点击导入学习资料">study studio</button></h1>
-    <p class="landing-hint">点击名称，或将学习资料拖到这里</p>
+    <div class="landing-center">
+      <h1><button id="open-studio" title="Open your learning space" aria-label="study studio — open your learning space">study studio<span class="brand-period">.</span></button></h1>
+      <div class="landing-entry"><button id="start-button" class="start-button">Click to start <span aria-hidden="true">↗</span></button><p>Your material. Your pace.</p></div>
+    </div>
+    <p class="landing-hint">A little more understanding. One small idea at a time.</p>
   </main>
 
   <div id="workspace" class="workspace" hidden>
     <header class="workspace-header">
-      <div class="header-left"><button class="icon-button" id="toc-toggle" aria-label="收起目录" aria-expanded="true" aria-controls="study-sidebar"></button><button class="wordmark" id="back-home">study studio</button></div>
+      <div class="header-left"><button class="icon-button" id="toc-toggle" aria-label="Hide contents" aria-expanded="true" aria-controls="study-sidebar"></button><button class="wordmark" id="back-home">study studio<span>.</span></button></div>
       <span class="document-name" id="document-name"></span>
-      <div class="header-actions"><select id="mode-switch" aria-label="选择学习模式"><option value="self">自学</option><option value="class">课上自学</option></select><button class="plain-button" id="open-library">我的资料</button><button class="icon-button" id="upload-another" aria-label="上传新资料" title="上传新资料"></button></div>
+      <div class="header-actions"><select id="mode-switch" aria-label="Learning mode"><option value="self">Self-study</option><option value="class">In class</option></select><button class="plain-button" id="open-library">My library</button><button class="icon-button" id="upload-another" aria-label="Upload material" title="Upload material"></button></div>
     </header>
     <div class="workspace-layout">
-      <button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="关闭目录" hidden></button>
-      <aside id="study-sidebar" class="study-sidebar" aria-label="资料目录与学习进度"></aside>
+      <button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="Close contents" hidden></button>
+      <aside id="study-sidebar" class="study-sidebar" aria-label="Contents and learning progress"></aside>
       <main id="reading" class="reading" tabindex="-1"></main>
     </div>
   </div>
 
   <dialog id="library-dialog" class="library-dialog" aria-labelledby="library-title">
-    <div class="dialog-top"><span class="eyebrow">YOUR OWN LEARNING SPACE</span><button class="icon-button" data-close aria-label="关闭">×</button></div>
-    <h2 id="library-title">从一份资料开始。</h2>
-    <p class="dialog-description">一本讲义，一段笔记，或一个想真正弄懂的问题。</p>
-    <fieldset class="mode-options"><legend>选择学习模式</legend><label><input type="radio" name="import-mode" value="self" checked><span><strong>自学</strong><small>理解 → 例题 → 独立练习 → 闭卷回忆</small></span></label><label><input type="radio" name="import-mode" value="class"><span><strong>课上自学</strong><small>跟随课堂，概念配简单题；课后集中练习复习</small></span></label></fieldset>
-    <button class="upload-zone" id="pick-file"><span id="upload-icon"></span><strong>选择文件，或拖到这里</strong><span>PDF、Markdown、TXT · 最大 25 MB</span></button>
-    <p class="privacy-note">资料仅在当前浏览器读取和保存。</p>
-    <div id="upload-status" class="upload-status" role="status" hidden><span class="loading-dot"></span><span id="upload-status-text">正在读取资料…</span></div>
+    <div class="dialog-top"><span class="eyebrow">YOUR LEARNING SPACE</span><button class="icon-button" data-close aria-label="Close">×</button></div>
+    <h2 id="library-title">One idea at a time.</h2>
+    <p class="dialog-description">Bring your notes. Make them your own.</p>
+    <fieldset class="mode-options"><legend>Choose your pace</legend>
+      <label><input type="radio" name="import-mode" value="self" checked><span><strong>Self-study</strong><small>Your pace. <br>Four clear steps.</small></span></label>
+      <label><input type="radio" name="import-mode" value="class"><span><strong>Learn along</strong><small>Learn in class. <br>Practise later.</small></span></label>
+    </fieldset>
+    <button class="upload-zone" id="pick-file"><span id="upload-icon"></span><strong>Drop your material here</strong><span>or <u>browse files</u></span><small>PDF, Markdown or TXT · Up to 25 MB</small></button>
+    <p class="privacy-note"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3.5" y="7" width="9" height="7" rx="1.5"/><path d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7"/></svg>Stays in this browser.</p>
+    <div id="upload-status" class="upload-status" role="status" hidden><span class="loading-dot"></span><span id="upload-status-text">Reading your material…</span></div>
     <p id="upload-error" class="upload-error" role="alert" hidden></p>
     <div id="saved-materials"></div>
-    <div class="sample-options"><span class="eyebrow">OR TAKE A LOOK AROUND</span><button class="sample-button" id="open-sample"><span><strong>Vector Spaces</strong><small>Basis · Coordinates · Dimension</small></span><span aria-hidden="true">↗</span></button><button class="text-button" id="open-builtin">打开原有的三个练习模块 <span aria-hidden="true">↗</span></button></div>
+    <details class="sample-options"><summary>Just exploring? <span>Try a sample <span aria-hidden="true">↗</span></span></summary><div class="sample-content"><button class="sample-button" id="open-sample"><span><strong>Vector Spaces</strong><small>Basis · Coordinates · Dimension</small></span><span aria-hidden="true">↗</span></button><button class="text-button" id="open-builtin">Explore three short lessons <span aria-hidden="true">→</span></button></div></details>
   </dialog>
-  <dialog id="rest-dialog" class="rest-dialog" aria-labelledby="rest-title"><button class="icon-button rest-close" data-close aria-label="关闭">×</button><div class="breathing-circle"></div><h2 id="rest-title">给自己一点空白。</h2><p>看一看远处，放松肩膀。<br>进度已经保存，专注计时已暂停。</p><button class="primary-button" id="resume-learning">准备好了，继续</button></dialog>
-  <dialog id="reviews-dialog" class="reviews-dialog" aria-labelledby="reviews-title"><div class="dialog-top"><span class="eyebrow">SPACED REPETITION</span><button class="icon-button" data-close aria-label="关闭">×</button></div><h2 id="reviews-title">再遇见一次。</h2><p class="dialog-description">只温故需要的部分，不必全部重新开始。</p><div id="reviews-list"></div></dialog>
+  <dialog id="rest-dialog" class="rest-dialog" aria-labelledby="rest-title"><button class="icon-button rest-close" data-close aria-label="Close">×</button><div class="breathing-circle"></div><h2 id="rest-title">A little room to breathe.</h2><p>Relax your shoulders. Look into the distance.<br>Your progress is saved and your timer is paused.</p><button class="primary-button" id="resume-learning">Ready when you are</button></dialog>
+  <dialog id="reviews-dialog" class="reviews-dialog" aria-labelledby="reviews-title"><div class="dialog-top"><span class="eyebrow">SPACED REPETITION</span><button class="icon-button" data-close aria-label="Close">×</button></div><h2 id="reviews-title">Meet an idea again.</h2><p class="dialog-description">Revisit what needs a little care. Keep what you know.</p><div id="reviews-list"></div></dialog>
   <canvas id="celebration" class="celebration" aria-hidden="true" hidden></canvas>
   <input type="file" id="file-input" accept=".pdf,.md,.markdown,.txt,text/plain,text/markdown,application/pdf" hidden>
-  <div id="drop-overlay" class="drop-overlay" hidden><strong>把资料放在这里。</strong><span>PDF · Markdown · TXT</span></div>
+  <div id="drop-overlay" class="drop-overlay" hidden><strong>Your next idea starts here.</strong><span>PDF · Markdown · TXT</span></div>
   <div id="toast" class="toast" role="status" hidden></div>
   <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 </body>

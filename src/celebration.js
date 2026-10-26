@@ -36,7 +36,7 @@ export function celebrate() {
   canvas.width = w * dpr; canvas.height = h * dpr;
   canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   ctx.scale(dpr, dpr); canvas.hidden = false;
-  const colors = ['#304b3d', '#6a866b', '#a5b79b', '#d6dfca', '#eef1e3'];
+  const colors = ['#0284c7', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd'];
   const particles = Array.from({ length: reduced ? 55 : 180 }, () => ({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - .5) * 100, vy: 90 + Math.random() * 130, size: 7 + Math.random() * 8, rotation: Math.random() * Math.PI, spin: (Math.random() - .5) * 8, color: colors[Math.floor(Math.random() * colors.length)] }));
   const start = performance.now();
   let previous = start;

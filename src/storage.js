@@ -8,7 +8,7 @@ function openDB() {
     request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'id' });
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => { connection = null; reject(request.error); };
-    request.onblocked = () => { connection = null; reject(new Error('请关闭其他 study studio 标签页后重试保存。')); };
+    request.onblocked = () => { connection = null; reject(new Error('Close other study studio tabs and try saving again.')); };
   });
   return connection;
 }
@@ -19,7 +19,7 @@ async function transaction(mode, operation) {
     const request = operation(tx.objectStore(STORE));
     tx.oncomplete = () => resolve(request.result);
     tx.onerror = () => reject(tx.error || request.error);
-    tx.onabort = () => reject(tx.error || new Error('资料保存被中断。'));
+    tx.onabort = () => reject(tx.error || new Error('Saving was interrupted. Please try again.'));
   });
 }
 export async function listMaterials() { return transaction('readonly', store => store.getAll()); }

@@ -70,20 +70,20 @@ export function formatTime(seconds) { return `${String(Math.floor(seconds / 60))
 export function escapeHTML(value = '') { return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 export function evaluatePractice(moduleId, variant, answer) {
   const a = answer.trim().replace(/[−–—]/g, '-').replace(/[（【]/g, '(').replace(/[）】]/g, ')').replace(/，/g, ',').replace(/\s/g, '').toLowerCase();
-  if (!a) return { status: 'empty', title: '先给自己的思考留一点空间。', text: '写下你的尝试。即使还不完整，也可以从你确定的那一步开始。' };
+  if (!a) return { status: 'empty', title: 'Start with your own thinking.', text: 'Write out your attempt. Start with the part you feel sure about, even if it is incomplete.' };
   if (moduleId === 'kernel') {
     const patterns = variant === 0 ? [/\(-2,1\)/, /\(2,-1\)/, /\(-2t,t\)/, /\(2t,-t\)/, /x=-2y/, /x\+2y=0/] : [/\(1,-2\)/, /\(-1,2\)/, /\(t,-2t\)/, /y=-2x/, /2x\+y=0/];
-    if (patterns.some(p => p.test(a))) return { status: 'recognized', title: '关键的关系，你已经找到了。', text: '回答中识别到了正确的方向或方程。还要确认：你表示的是所有解，并能解释为什么它是一条经过原点的直线。' };
-    if (/(只有|仅有|就是|只有一个).*\(0,0\)/.test(a) || a === '(0,0)') return { status: 'retry', title: '零向量在核里，但这里还有其他向量。', text: '这是概念上的一个小卡点。试着寻找一个非零输入，使输出也为零。暂时不用重做整道题。' };
+    if (patterns.some(p => p.test(a))) return { status: 'recognized', title: 'You found the key relationship.', text: 'Your response includes the correct direction or equation. Check that it describes all solutions and explains why they form a line through the origin.' };
+    if (/(只有|仅有|就是|只有一个).*\(0,0\)/.test(a) || a === '(0,0)') return { status: 'retry', title: 'The zero vector is in the kernel, but it is not alone.', text: 'Try finding a nonzero input that also maps to zero. Focus on that idea; you do not need to restart the whole problem.' };
   }
   if (moduleId === 'derivative') {
     const expected = variant === 0 ? '6' : '-4';
-    if (a === expected || new RegExp(`(?:=|为|是|斜率[:：]?)(?:${expected})(?![0-9.])`).test(a)) return { status: 'recognized', title: '变化率的数值找对了。', text: '再检查你的解释：这个数字表示切线斜率与瞬时变化率，而不是函数值。用下面的自检确认推理。' };
-    if (variant === 0 && /^(9|f\(3\)=9)[。.]?$/.test(a)) return { status: 'retry', title: '你找到的是曲线的高度。', text: 'f(3) = 9 是函数值。这道题要找的是 x = 3 时变化的快慢。回想导数与函数值的区别，再试一次。' };
+    if (a === expected || new RegExp(`(?:=|为|是|斜率[:：]?)(?:${expected})(?![0-9.])`).test(a)) return { status: 'recognized', title: 'You found the rate of change.', text: 'Check your explanation: this number is a tangent slope and an instantaneous rate, not a function value. Use the checklist to verify your reasoning.' };
+    if (variant === 0 && /^(9|f\(3\)=9)[。.]?$/.test(a)) return { status: 'retry', title: 'You found the height of the curve.', text: 'f(3) = 9 is the function value. This question asks how fast the function changes at x = 3. Think about that distinction and try again.' };
   }
   if (moduleId === 'recursion') {
     const expected = variant === 0 ? '24' : '120';
-    if (a === expected || new RegExp(`(?:=|为|是|返回|得到)${expected}(?![0-9.])`).test(a)) return { status: 'recognized', title: '返回值正确，继续检查调用过程。', text: '数值只是其中一部分。确认你能解释在哪里停止递归，以及结果怎样逐层返回。' };
+    if (a === expected || new RegExp(`(?:=|为|是|返回|得到)${expected}(?![0-9.])`).test(a)) return { status: 'recognized', title: 'The return value is right. Now check the calls.', text: 'The number is only part of the answer. Explain where recursion stops and how results return through the calls.' };
   }
-  return { status: 'manual', title: '你的思路已保存，接下来对照自检。', text: '这段自由表达无法可靠地自动判断。请逐项核对下面的标准；若不确定，可以继续修改或展开一条提示。只有你确认每项都做到，才继续前进。' };
+  return { status: 'manual', title: 'Your thinking is saved. Let’s check it.', text: 'This free-form response cannot be reliably checked automatically. Compare it with each criterion below. Revise your reasoning or open a hint if needed, and move on when you are confident.' };
 }

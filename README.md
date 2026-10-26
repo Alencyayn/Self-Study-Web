@@ -1,6 +1,8 @@
 # study studio
 
-首页只保留一个居中的粗体名字。点击 **study studio**，或拖入自己的资料，进入左侧目录、右侧学习内容的阅读空间。
+天蓝色界面、自托管 Inter 可变字体，默认语言为英文。首页居中显示 **study studio**，点击 **Click to start** 或拖入资料，即可进入左侧目录、右侧内容的学习空间。上传资料保留原文语言。
+
+导入面板采用统一网格、对齐的模式卡片与更大的文字；次要示例折叠在 **Try a sample** 下，已保存资料显示在 **Continue learning** 中。
 
 ## 两种模式
 
@@ -64,6 +66,6 @@ npm run test:browser  # 先启动开发服务；需要本机 Chromium
 - `src/celebration.js`：全屏彩带、庆祝声音及静音设置。
 - `src/learning.js`、`src/courses.js`：原有练习与进度能力。
 - `assets/sample-material.md`：与示例图相同主题的线性代数资料。
-- `scripts/prepare-assets.mjs`：从锁定依赖准备本站资源；第三方许可证随构建保留。
+- `scripts/prepare-assets.mjs`：从锁定依赖准备 PDF、公式与 Inter 字体；第三方许可证随构建保留。
 
-`node_modules/`、`assets/pdfjs/`、`assets/katex/` 与 `dist/` 为可重复生成的忽略目录，不提交到仓库。
+`node_modules/`、`assets/pdfjs/`、`assets/katex/`、`assets/fonts/` 与 `dist/` 为可重复生成的忽略目录，不提交到仓库。

@@ -1,46 +1,46 @@
 # Vector Spaces
 
-独立理解、证明和应用 Vector Spaces 的重要定理。
+Understand, prove and apply the key ideas of vector spaces, one small step at a time.
 
 ## 4.3 — Basis
 
-核心问题：一组 vectors，怎样才能成为一个空间的 basis？
+Core question: When does a set of vectors form a basis for a space?
 
 ### THE KEY IDEA
 
-一个 vector space 的 **basis（基）**，是一组同时满足两个条件的向量：**linearly independent**，并且 **span 整个空间**。
+A **basis** is a set of vectors that satisfies two conditions: it is **linearly independent**, and it **spans the entire space**.
 
-它像一套最精简的坐标语言：每一个向量都能用它表示，而且表示方式只有一种。
+Think of it as the smallest complete coordinate language. Every vector in the space has exactly one expression in that language.
 
 $$
 \mathcal{B}=\{v_1,v_2,\ldots,v_n\}
 $$
 
-不多一个，也不少一个。移除其中一个向量，就无法再表示整个空间；增加一个向量，则不再线性无关。
+Nothing extra, nothing missing. Remove a vector and the set no longer spans the space. Add another and the set is no longer independent.
 
 ### WORKED EXAMPLE
 
-考虑 $\mathbb{R}^2$ 中的两个向量 $v_1=(1,0)$ 和 $v_2=(0,1)$。
+Consider $v_1=(1,0)$ and $v_2=(0,1)$ in $\mathbb{R}^2$.
 
-1. 任意 $(x,y)$ 都能写成 $xv_1+yv_2$，所以它们 span 整个 $\mathbb{R}^2$。
-2. 若 $av_1+bv_2=0$，则 $(a,b)=(0,0)$，因此它们 linearly independent。
-3. 两个条件同时满足，所以 $\{v_1,v_2\}$ 是 $\mathbb{R}^2$ 的一组 basis。
+1. Every $(x,y)$ can be written as $xv_1+yv_2$, so the vectors span $\mathbb{R}^2$.
+2. If $av_1+bv_2=0$, then $(a,b)=(0,0)$, so the vectors are linearly independent.
+3. Both conditions hold. Therefore $\{v_1,v_2\}$ is a basis for $\mathbb{R}^2$.
 
 ### QUICK CHECK
 
-向量组 $\{(1,0),(1,1)\}$ 是 $\mathbb{R}^2$ 的一组 basis 吗？请分别检查 spanning 和 linear independence，并说明为什么。
+Is $\{(1,0),(1,1)\}$ a basis for $\mathbb{R}^2$? Check both spanning and linear independence, and explain your reasoning.
 
 ### ANSWER
 
-是。任意 $(x,y)=(x-y)(1,0)+y(1,1)$，因此它们 span 整个平面。若 $a(1,0)+b(1,1)=(0,0)$，则 $b=0$ 且 $a=0$，所以线性无关。
+Yes. Every $(x,y)=(x-y)(1,0)+y(1,1)$, so the set spans the plane. If $a(1,0)+b(1,1)=(0,0)$, then $b=0$ and $a=0$, so it is linearly independent.
 
 ## 4.4 — Coordinates
 
-核心问题：同一个向量，为什么可以有不同的 coordinate vector？
+Core question: How can the same vector have different coordinate vectors?
 
 ### THE KEY IDEA
 
-选定一组 basis 后，一个向量的 **coordinate vector（坐标向量）**，记录的是它由各个基向量组成时的系数。
+Once you choose an ordered basis, a **coordinate vector** records the coefficients used to express a vector in that basis.
 
 $$
 v=c_1b_1+\cdots+c_nb_n
@@ -48,61 +48,61 @@ v=c_1b_1+\cdots+c_nb_n
 [v]_{\mathcal{B}}=\begin{bmatrix}c_1\\\vdots\\c_n\end{bmatrix}
 $$
 
-向量本身没有改变，改变的是描述它的坐标语言。顺序也很重要：坐标的第一个分量，总是对应 basis 中的第一个向量。
+The vector has not changed, only the language used to describe it. Order matters: the first coordinate belongs to the first basis vector.
 
 ### WORKED EXAMPLE
 
-取 $\mathcal{B}=\{(1,1),(1,-1)\}$，求 $v=(4,2)$ 的坐标向量。
+Let $\mathcal{B}=\{(1,1),(1,-1)\}$. Find the coordinate vector of $v=(4,2)$.
 
-1. 写成 $v=c_1(1,1)+c_2(1,-1)$。
-2. 比较两个分量：$c_1+c_2=4$，$c_1-c_2=2$。
-3. 解得 $c_1=3$，$c_2=1$。所以 $[v]_{\mathcal{B}}=(3,1)$，它与标准坐标 $(4,2)$ 描述的是同一个向量。
+1. Write $v=c_1(1,1)+c_2(1,-1)$.
+2. Compare components: $c_1+c_2=4$ and $c_1-c_2=2$.
+3. Solve to get $c_1=3$ and $c_2=1$. Thus $[v]_{\mathcal{B}}=(3,1)$ describes the same vector as the standard coordinates $(4,2)$.
 
 ### QUICK CHECK
 
-在相同 basis $\mathcal{B}=\{(1,1),(1,-1)\}$ 下，求 $(2,4)$ 的坐标向量，并代回检查。
+Using the same basis $\mathcal{B}=\{(1,1),(1,-1)\}$, find the coordinates of $(2,4)$. Substitute your result to check it.
 
 ### ANSWER
 
-由 $c_1+c_2=2$、$c_1-c_2=4$，得到 $c_1=3$、$c_2=-1$。所以坐标向量为 $(3,-1)$。检验：$3(1,1)-(1,-1)=(2,4)$。
+Solving $c_1+c_2=2$ and $c_1-c_2=4$ gives $c_1=3$ and $c_2=-1$. The coordinate vector is $(3,-1)$. Check: $3(1,1)-(1,-1)=(2,4)$.
 
 ## 4.5 — Dimension & Linear Independence
 
-核心问题：为什么一个空间不可能拥有超过其维度数量的 independent vectors？
+Core question: Why can a space not have more independent vectors than its dimension?
 
 ### THE KEY IDEA
 
-如果 $\mathcal{B}$ 是 $V$ 的 basis，且包含 $n$ 个 vectors，那么每个 vector 都有一个 $n$-entry coordinate vector：
+If $\mathcal{B}$ is a basis for $V$ with $n$ vectors, every vector has an $n$-entry coordinate vector:
 
 $$
 [v]_{\mathcal{B}}\in\mathbb{R}^n
 $$
 
-这使我们能够把一般 Vector Space 的 independence 问题转化为矩阵问题。
+This lets us turn an independence question in a general vector space into a matrix problem.
 
-把 $m$ 个 coordinate vectors 按列排列，得到一个 $n\times m$ 的矩阵。若 $m>n$，每列不可能都有 pivot，因此齐次方程存在自由变量，这些 vectors 必然 linearly dependent。
+Arrange $m$ coordinate vectors as columns of an $n\times m$ matrix. If $m>n$, not every column can contain a pivot. The homogeneous system has a free variable, so the vectors are linearly dependent.
 
 ### WORKED EXAMPLE
 
-在 $P_2$ 中，standard basis 为 $\{1,t,t^2\}$，空间维度为 $3$。
+The standard basis of $P_2$ is $\{1,t,t^2\}$. The space has dimension $3$.
 
-1. 每个 polynomial 都对应一个含 $3$ 个分量的坐标向量。
-2. 把 $4$ 个 polynomials 的坐标按列排列，得到 $3\times4$ 的矩阵。
-3. 最多只能有 $3$ 个 pivots，至少有一个 free variable。
-4. 所以任何 $4$ 个 $P_2$ 中的 polynomials 都 linearly dependent。
+1. Every polynomial corresponds to a coordinate vector with $3$ entries.
+2. The coordinates of $4$ polynomials form a $3\times4$ matrix when arranged as columns.
+3. There can be at most $3$ pivots, so there is at least one free variable.
+4. Any $4$ polynomials in $P_2$ must therefore be linearly dependent.
 
 ### QUICK CHECK
 
-已知 $P_3$ 的 standard basis：
+The standard basis of $P_3$ is:
 
 $$
 \mathcal{B}=\{1,t,t^2,t^3\}
 $$
 
-如果将 **6 个 polynomials** 的 coordinate vectors 排列为一个 matrix：
+Arrange the coordinate vectors of **6 polynomials** as the columns of a matrix.
 
-**这个 matrix 是几行几列？为什么？它的 columns 能 linearly independent 吗？**
+**How many rows and columns does it have, and why? Can its columns be linearly independent?**
 
 ### ANSWER
 
-矩阵是 $4\times6$：每个坐标向量有 $4$ 个 entries，对应 $4$ 行；$6$ 个 polynomials 对应 $6$ 列。最多有 $4$ 个 pivots，所以至少有 $2$ 个 free variables，columns 不可能 linearly independent。
+It is a $4\times6$ matrix. Every coordinate vector has $4$ entries, giving $4$ rows. The $6$ polynomials give $6$ columns. There can be at most $4$ pivots, leaving at least $2$ free variables, so the columns cannot be linearly independent.

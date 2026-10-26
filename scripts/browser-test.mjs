@@ -105,16 +105,30 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await navigation(() => send('Page.navigate', { url: base }));
   await wait(`document.querySelector('#open-studio') && document.querySelector('#upload-icon svg')`);
+  await run('document.fonts.ready');
   assert.equal(await run('document.title'), 'study studio');
-  assert.equal(await run(`document.querySelector('#open-studio').textContent`), 'study studio');
+  assert.equal(await run(`document.querySelector('#open-studio').textContent.replace(/\.$/, '')`), 'study studio');
   assert.equal(await run(`document.querySelector('#workspace').hidden`), true);
   assert.equal(await run(`(() => { const r = document.querySelector('#open-studio').getBoundingClientRect(); return Math.abs(r.left+r.width/2-innerWidth/2)<2 && Math.abs(r.top+r.height/2-innerHeight/2)<2; })()`), true, 'the single bold name is centered');
   await screenshot('/tmp/study-studio-home.png');
-  await click('#open-studio');
+  await click('#start-button');
+  await run('document.fonts.ready');
+  assert.equal(await run(`document.documentElement.lang`), 'en');
+  assert.equal(await run(`document.fonts.check('16px Inter')`), true, 'self-hosted Inter has loaded');
+  assert.equal(await run(`getComputedStyle(document.querySelector('#library-title')).fontFamily.includes('Inter')`), true);
+  assert.equal(await run(`getComputedStyle(document.querySelector('.dialog-description')).fontSize`), '15px', 'dialog copy is readable');
+  assert.equal(await run(`document.querySelector('.sample-options').open`), false, 'secondary samples start collapsed');
+  assert.equal(await run(`document.querySelector('#library-dialog').scrollWidth <= document.querySelector('#library-dialog').clientWidth`), true);
+  await screenshot('/tmp/study-studio-import.png');
   assert.equal(await run(`document.querySelectorAll('[name="import-mode"]').length`), 2);
   await upload(mdPath, 'my-vector-notes.md');
   assert.equal(await run(`document.querySelectorAll('.chapter-link').length`), 3, 'uploaded headings become the table of contents');
   assert.deepEqual(await completedStages(), []);
+  assert.equal(await run(`/[\\u4e00-\\u9fff]/.test(document.querySelector('#workspace').innerText)`), false, 'English material has an entirely English interface');
+  await click('#open-library');
+  assert.equal(await run(`document.querySelector('.material-link small').textContent`), '3 sections · 0 complete');
+  await screenshot('/tmp/study-studio-library.png');
+  await click('#library-dialog [data-close]');
   await click('[data-section="2"]');
   assert.equal(await run(`document.querySelector('.article-heading h1').textContent`), 'Dimension & Linear Independence');
   assert.equal(await run(`document.querySelectorAll('.katex').length > 0`), true);
@@ -141,7 +155,7 @@ try {
   await check('每个坐标向量有四个分量，所以矩阵有4行6列。维度限制了可能线性无关的向量个数。');
   assert.equal(await chapterDone(2), true, 'only the actually completed module gets a solid circle');
   assert.equal(await chapterDone(0), false);
-  assert.equal(await run(`getComputedStyle(document.querySelector('[data-section="2"] .chapter-marker')).backgroundColor`), 'rgb(48, 75, 61)');
+  assert.equal(await run(`getComputedStyle(document.querySelector('[data-section="2"] .chapter-marker')).backgroundColor`), 'rgb(2, 132, 199)');
   assert.equal(await run(`document.querySelector('#celebration').hidden`), false, 'completion triggers full-screen confetti');
   assert.equal(await run(`window.__toneCount`), 4, 'completion schedules the four-note celebration sound');
   await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
@@ -202,7 +216,11 @@ try {
 
   // Mobile controls: drawer, arbitrary chapters, safe text, and centered home.
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await click('#upload-another'); await upload(mobilePath, 'mobile-notes.md');
+  await click('#upload-another');
+  assert.equal(await run(`document.querySelector('#upload-error').hidden`), true, 'reopening the library clears a previous upload error');
+  assert.equal(await run(`document.querySelector('#library-dialog').scrollWidth <= document.querySelector('#library-dialog').clientWidth`), true);
+  await screenshot('/tmp/study-studio-mobile-import.png');
+  await upload(mobilePath, 'mobile-notes.md');
   assert.equal(await run(`document.querySelector('#toc-toggle').getAttribute('aria-expanded')`), 'false');
   await click('#toc-toggle'); await click('[data-section="2"]');
   assert.equal(await run(`document.querySelector('#toc-toggle').getAttribute('aria-expanded')`), 'false');
@@ -220,9 +238,36 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 740, deviceScaleFactor: 1, mobile: true });
   assert.equal(await run('document.documentElement.scrollWidth <= innerWidth'), true, '320px has no horizontal overflow');
   await click('#back-home');
+  await click('#start-button');
+  assert.equal(await run(`document.querySelector('#library-dialog').scrollWidth <= document.querySelector('#library-dialog').clientWidth`), true, '320px import panel has no horizontal overflow');
+  await click('#library-dialog [data-close]');
   assert.equal(await run(`document.querySelector('#home').hidden`), false);
+  await screenshot('/tmp/study-studio-mobile-home.png');
+  // App-provided samples move to English without resetting the learner's work.
+  await run(`(async () => {
+    const { parseTextMaterial, createMaterial } = await import('/src/materials.js');
+    const parsed = parseTextMaterial(await (await fetch('/assets/sample-material.md')).text(), 'Vector Spaces.md');
+    const old = createMaterial(parsed, '旧的示例资料', 'sample-vector-spaces', {kind:'sample', mode:'self'});
+    old.description = '旧版说明';
+    old.sections[0].body = '旧版内容'; old.sections[0].blocks.key = '旧版内容';
+    old.sections[0].progress.completed[0] = true;
+    old.sections[0].progress.drafts[0] = 'My original explanation is preserved.';
+    old.sections[0].progress.understandingReviewed = true;
+    await new Promise((resolve, reject) => { const request = indexedDB.open('study-studio-materials', 1); request.onsuccess = () => { const db = request.result; const tx = db.transaction('materials', 'readwrite'); tx.objectStore('materials').put(old); tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => reject(tx.error); }; });
+  })()`);
+  await navigation(() => send('Page.reload'));
+  await wait(`document.querySelector('#upload-icon svg')`);
+  await click('#start-button'); await click('.sample-options summary'); await click('#open-sample');
+  await wait(`document.querySelector('#document-name').textContent === 'Vector Spaces · Sample' && !document.querySelector('#library-dialog').open`);
+  assert.equal(await run(`document.querySelector('.source-section').textContent.includes('smallest complete coordinate language')`), true);
+  assert.deepEqual(await completedStages(), [0], 'sample translation preserves the exact completed stages');
+  assert.equal(await run(`document.querySelector('#study-answer').value`), 'My original explanation is preserved.');
+  await click('#upload-another'); await click('#open-builtin');
+  await wait(`document.querySelector('#document-name').textContent === 'Built-in lessons'`);
+  assert.equal(await run(`document.querySelector('.article-heading h1').textContent`), 'The kernel of a transformation');
+  assert.equal(await run(`/[\\u4e00-\\u9fff]/.test(document.querySelector('#workspace').innerText)`), false, 'built-in course content is also English');
   assert.deepEqual(errors, [], 'no browser JavaScript, worker, or asset errors');
-  console.log('PASS: centered renamed home; actual Markdown and three-page PDF uploads; original-content rendering; math; persistent documents and drafts; collapsible responsive contents; both modes; batch classroom work; arbitrary stage/chapter access without false completion; theme-colored completed circles; full-screen confetti, sound and mute; reviews; mobile; safe file errors and HTML escaping.');
+  console.log('PASS: sky-blue English UI, self-hosted Inter, prominent start button, aligned simplified import dialog, preserved sample progress; centered home; actual Markdown and three-page PDF uploads; original-content rendering; math; persistent documents and drafts; collapsible responsive contents; both modes; batch classroom work; arbitrary stage/chapter access without false completion; theme-colored completed circles; full-screen confetti, sound and mute; reviews; mobile; safe file errors and HTML escaping.');
   console.log('Screenshots: /tmp/study-studio-{home,reading,celebration,mobile,mobile-contents}.png');
 } catch (error) {
   await captureFailure?.();
